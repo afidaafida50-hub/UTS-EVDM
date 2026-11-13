@@ -5299,7 +5299,9 @@ if uploaded_file is not None:
                 "Format atau struktur kolom data tidak sesuai."
             )
         else:
-            st.sidebar.success("Data berhasil dimuat.")
+            if st.sidebar.button("Atur ulang filter", key="reset_filter_awal"):
+              st.session_state.clear()
+              st.rerun()
 
     except Exception as e:
         st.sidebar.error(f"Gagal membaca data: {e}")
@@ -6344,7 +6346,7 @@ prod_levels = get_levels(data_raw, "Product line")
 if "reset_filter" not in st.session_state:
     st.session_state["reset_filter"] = False
 
-if st.sidebar.button("Atur ulang filter"):
+if st.sidebar.button("Atur ulang filter", key="reset_filter_lanjutan"):
     st.session_state["reset_filter"] = True
     st.rerun()
 
