@@ -5927,7 +5927,8 @@ with tabs[3]:
         mv_dvars = st.multiselect(
             "Variabel numerik (minimal 2)",
             num_all,
-            default=num_all
+            default=num_all,
+          key="mv_dvars_multiselect"
         )
 
         col1, col2 = st.columns(2)
