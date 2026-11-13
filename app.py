@@ -2341,119 +2341,1162 @@ def bi_text(d, x, y):
 # =============================================================================
 # 4. MULTIVARIAT
 # =============================================================================
-plot_mv_scatter <- function(d, x, y, col, size, facet, lines) {
-  g <- ggplot(d, aes(.data[[x]], .data[[y]]))
-  hasc <- col != NONE; hass <- size != NONE
-  g <- g + if (hasc && hass) geom_point(aes(colour = .data[[col]], size = .data[[size]]), alpha = .6)
-  else if (hasc) geom_point(aes(colour = .data[[col]]), alpha = .6, size = 2)
-  else if (hass) geom_point(aes(size = .data[[size]]), colour = pk$m, alpha = .5)
-  else geom_point(colour = pk$m, alpha = .6, size = 2)
-  if (hasc) g <- g + (if (is.numeric(d[[col]])) scale_colour_gradient(low = pk$xl, high = pk$d, name = col) else scale_colour_manual(values = pal_cat(nlevels(d[[col]])), name = col))
-  if (hass) g <- g + scale_size_continuous(range = c(1, 5), name = size)
-  if (lines) g <- g + (if (hasc && !is.numeric(d[[col]])) geom_smooth(aes(colour = .data[[col]]), method = "lm", formula = y ~ x, se = FALSE, linewidth = .9)
-                       else geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = .9))
-  if (facet != NONE) g <- g + facet_wrap(vars(.data[[facet]]))
-  g + labs(title = paste(y, "terhadap", x), subtitle = paste0("Warna: ", col, " | Ukuran: ", size, " | Panel: ", facet), x = x, y = y) + theme_pink()
-}
 
-mv_heat_data <- function(d, a, b, num, fun) {
-  f <- switch(fun, "Rata-rata" = mean, "Median" = median, "Jumlah" = sum, "Banyak transaksi" = length)
-  v <- if (fun == "Banyak transaksi") d[[a]] else d[[num]]
-  res <- aggregate(v, list(A = d[[a]], B = d[[b]]), f); names(res)[3] <- "val"; res
-}
-plot_mv_heat <- function(d, a, b, num, fun) {
-  res <- mv_heat_data(d, a, b, num, fun); mid <- (max(res$val) + min(res$val)) / 2
-  lab <- if (fun == "Banyak transaksi") "Banyak transaksi" else paste(fun, num)
-  ggplot(res, aes(A, B, fill = val)) + geom_tile(colour = "white") + geom_text(aes(label = fmt(val, if (fun == "Banyak transaksi") 0 else 1), colour = val > mid), show.legend = FALSE, fontface = "bold") +
-    scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = pk$txt)) + scale_fill_gradient(low = pk$bg, high = pk$d, name = lab) +
-    labs(title = lab, subtitle = paste("menurut", a, "dan", b), x = a, y = b) + theme_pink() + rot
-}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-plot_mv_cor <- function(d, vars, method) {
-  m <- cor(d[, vars, drop = FALSE], method = method); df <- as.data.frame(as.table(m)); names(df) <- c("V1", "V2", "r")
-  ggplot(df, aes(V1, V2, fill = r)) + geom_tile(colour = "white") + geom_text(aes(label = sprintf("%.2f", r)), colour = pk$txt, fontface = "bold", size = 4.5) +
-    scale_fill_gradient2(low = pk$slate, mid = "white", high = pk$s, limits = c(-1, 1), midpoint = 0, name = "r") +
-    labs(title = paste("Matriks korelasi", tools::toTitleCase(method)), x = NULL, y = NULL) + theme_pink() + theme(panel.grid = element_blank())
-}
+from scipy import stats
+from scipy.stats import chi2
+from scipy.spatial.distance import mahalanobis
+from sklearn.decomposition import PCA
+from statsmodels.nonparametric.smoothers_lowess import lowess
 
-trend_data <- function(d, metric, unit, grp) {
-  d$Periode <- switch(unit, "Harian" = d$Date, "Mingguan" = as.Date(cut(d$Date, "week")), "Bulanan" = as.Date(cut(d$Date, "month")))
-  gl <- if (grp == NONE) "Periode" else c("Periode", grp)
-  d %>% group_by(across(all_of(gl))) %>%
-    summarise(val = switch(metric, "Jumlah transaksi" = n(), "Total penjualan (jumlah)" = sum(Total), "Rata-rata Total" = mean(Total), "Rata-rata Rating" = mean(Rating), "Total Quantity" = sum(Quantity)), .groups = "drop")
-}
-plot_mv_trend <- function(d, metric, unit, grp) {
-  td <- trend_data(d, metric, unit, grp)
-  g <- if (grp == NONE) ggplot(td, aes(Periode, val)) + geom_line(colour = pk$d, linewidth = 1) + geom_point(colour = pk$m)
-  else ggplot(td, aes(Periode, val, colour = .data[[grp]])) + geom_line(linewidth = 1) + geom_point() + scale_colour_manual(values = pal_cat(nlevels(d[[grp]])))
-  g + labs(title = paste(metric, unit, if (grp != NONE) paste("menurut", grp) else ""), subtitle = if (unit == "Mingguan") "Minggu pertama/terakhir dapat tidak lengkap" else NULL, x = "Periode", y = metric, colour = grp) + theme_pink()
-}
 
-pca_fit <- function(d, vars) prcomp(d[, vars, drop = FALSE], scale. = TRUE)
-plot_mv_pca <- function(d, vars, colv) {
-  pr <- pca_fit(d, vars); sc <- as.data.frame(pr$x[, 1:2]); ve <- 100 * pr$sdev^2 / sum(pr$sdev^2)
-  ld <- as.data.frame(pr$rotation[, 1:2]); k <- min(max(abs(sc$PC1)), max(abs(sc$PC2))) * 0.85; ld$PC1 <- ld$PC1 * k; ld$PC2 <- ld$PC2 * k; ld$v <- rownames(ld)
-  g <- ggplot(sc, aes(PC1, PC2))
-  if (colv != NONE) { sc[[colv]] <- d[[colv]]; g <- ggplot(sc, aes(PC1, PC2, colour = .data[[colv]])) + geom_point(alpha = .6, size = 1.8) + scale_colour_manual(values = pal_cat(nlevels(d[[colv]])), name = colv) }
-  else g <- g + geom_point(colour = pk$m, alpha = .5, size = 1.8)
-  g + geom_segment(data = ld, aes(x = 0, y = 0, xend = PC1, yend = PC2), inherit.aes = FALSE, arrow = arrow(length = unit(.2, "cm")), colour = pk$d, linewidth = .8) +
-    geom_text(data = ld, aes(PC1, PC2, label = v), inherit.aes = FALSE, colour = pk$d, fontface = "bold", vjust = -.6) +
-    labs(title = "PCA biplot", x = sprintf("PC1 (%.1f%%)", ve[1]), y = sprintf("PC2 (%.1f%%)", ve[2])) + theme_pink()
-}
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 
-# ---- Scatterplot matrix, Mahalanobis, Q-Q Chi-Square ----
-plot_mv_pairs <- function(d, vars, colv) {
-  grp <- if (colv != NONE) d[[colv]] else NULL
-  cols <- if (is.null(grp)) pk$m else pal_cat(nlevels(grp))[as.integer(grp)]
-  p_pts  <- function(x, y, ...) { points(x, y, pch = 16, cex = .7, col = adjustcolor(cols, .55)); lines(lowess(x, y), col = pk$d, lwd = 1.6) }
-  p_cor  <- function(x, y, ...) { usr <- par("usr"); on.exit(par(usr = usr)); par(usr = c(0, 1, 0, 1)); r <- cor(x, y); text(.5, .5, sprintf("r = %.2f", r), cex = 1 + 1.4 * abs(r), col = pk$d, font = 2) }
-  p_hist <- function(x, ...) { usr <- par("usr"); on.exit(par(usr = usr)); par(usr = c(usr[1:2], 0, 1.5)); h <- hist(x, plot = FALSE)
-  rect(h$breaks[-length(h$breaks)], 0, h$breaks[-1], h$counts / max(h$counts), col = pk$xl, border = "white") }
-  pairs(d[, vars, drop = FALSE], lower.panel = p_pts, upper.panel = p_cor, diag.panel = p_hist, gap = .4, cex.labels = 1.3, font.labels = 2,
-        oma = c(6, 4, 6, 4), main = "Scatterplot matrix (pairs plot)", col.main = pk$d, cex.main = 1.2)
-  if (!is.null(grp)) {
-    par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE); plot.new()
-    legend("bottom", legend = levels(grp), pch = 16, col = pal_cat(nlevels(grp)), horiz = TRUE, bty = "n", title = colv, inset = c(0, .005))
-  }
-}
+def _palette(n):
+    if "pal_cat" in globals():
+        return pal_cat(n)
+    return sns.color_palette("husl", n_colors=max(n, 1))
 
-mahal_fit <- function(d, vars) {
-  X <- as.matrix(d[, vars, drop = FALSE]); p <- length(vars)
-  D2 <- tryCatch(mahalanobis(X, colMeans(X), cov(X)), error = function(e) NULL)
-  validate(need(!is.null(D2), "Matriks kovarians singular (ada variabel yang bergantung linear). Kurangi variabel yang dipilih."))
-  cut <- qchisq(.975, df = p)
-  list(df = data.frame(idx = seq_len(nrow(X)), D2 = D2, pval = pchisq(D2, p, lower.tail = FALSE), out = D2 > cut), cut = cut, p = p, X = X)
-}
-plot_mv_mahal_idx <- function(f) {
-  df <- f$df; df$Status <- factor(ifelse(df$out, "Pencilan", "Normal"), levels = c("Normal", "Pencilan"))
-  o <- df[df$out, ]; o <- head(o[order(-o$D2), ], 5)
-  ggplot(df, aes(idx, D2, colour = Status)) + geom_point(alpha = .7, size = 1.6) + geom_hline(yintercept = f$cut, linetype = "dashed", colour = pk$d) +
-    geom_text(data = o, aes(label = idx), vjust = -.6, size = 3, show.legend = FALSE) +
-    scale_colour_manual(values = c(Normal = pk$l, Pencilan = pk$d), drop = FALSE) +
-    labs(title = "Jarak Mahalanobis (D2) per observasi", subtitle = sprintf("Garis putus-putus = batas Chi-Square 97.5%% (df = %d): %.2f | Pencilan: %d (%.1f%%)", f$p, f$cut, sum(df$out), 100 * mean(df$out)),
-         x = "Indeks observasi", y = "D2 (kuadrat jarak Mahalanobis)") + theme_pink(11)
-}
-plot_mv_mahal_sc <- function(f, vars) {
-  df <- data.frame(x = f$X[, 1], y = f$X[, 2], Status = factor(ifelse(f$df$out, "Pencilan", "Normal"), levels = c("Normal", "Pencilan")))
-  ggplot(df, aes(x, y, colour = Status, size = Status)) + geom_point(alpha = .65) +
-    scale_colour_manual(values = c(Normal = pk$l, Pencilan = pk$d), drop = FALSE) + scale_size_manual(values = c(Normal = 1.6, Pencilan = 2.6), guide = "none") +
-    labs(title = "Pencilan multivariat pada ruang dua variabel", subtitle = paste0("Ditampilkan: ", vars[1], " dan ", vars[2], " (dua variabel pertama yang dipilih)"), x = vars[1], y = vars[2]) + theme_pink(11)
-}
-mahal_table <- function(d, f, vars) {
-  df <- f$df; o <- df[order(-df$D2), ][seq_len(min(10, nrow(df))), ]
-  cbind(data.frame(Baris = o$idx, D2 = fmt(o$D2, 2), `p-value` = fmt_p(o$pval), Status = ifelse(o$out, "Pencilan", "Normal"), check.names = FALSE),
-        setNames(lapply(vars, function(v) fmt(d[[v]][o$idx], 1)), vars))
-}
-plot_mv_qqchi <- function(f) {
-  n <- nrow(f$df); o <- order(f$df$D2)
-  s <- data.frame(D2 = f$df$D2[o], idx = f$df$idx[o], out = f$df$out[o]); s$q <- qchisq((seq_len(n) - .5) / n, df = f$p)
-  s$Status <- factor(ifelse(s$out, "Pencilan", "Normal"), levels = c("Normal", "Pencilan"))
-  ggplot(s, aes(q, D2, colour = Status)) + geom_point(alpha = .7, size = 1.8) + geom_abline(slope = 1, intercept = 0, colour = pk$d, linewidth = .9) +
-    geom_text(data = tail(s, 3), aes(label = idx), vjust = -.6, size = 3, show.legend = FALSE) +
-    scale_colour_manual(values = c(Normal = pk$m, Pencilan = pk$d), drop = FALSE) +
-    labs(title = "Q-Q plot Chi-Square", subtitle = sprintf("D2 terurut vs kuantil Chi-Square (df = %d); titik di sekitar garis = mendekati normal multivariat", f$p),
-         x = "Kuantil teoretis Chi-Square", y = "D2 terurut (sampel)") + theme_pink(11)
-}
+
+def _none(value):
+    return value is None or value == NONE if "NONE" in globals() else value is None or value == "NONE"
+
+
+def _format(value, digits=1):
+    if "fmt" in globals():
+        return fmt(value, digits)
+    return f"{value:.{digits}f}".replace(".", ",")
+
+
+def _theme(ax, size=11):
+    p = globals().get("pk", {})
+    bg = p.get("bg", "#FFF5F8")
+    txt = p.get("txt", "#59434D")
+
+    ax.set_facecolor(bg)
+    ax.tick_params(colors=txt, labelsize=size)
+    ax.xaxis.label.set_color(txt)
+    ax.yaxis.label.set_color(txt)
+    ax.title.set_color(txt)
+    ax.title.set_fontweight("bold")
+
+    for spine in ax.spines.values():
+        spine.set_color("#E8D5DE")
+
+    ax.grid(False)
+
+
+def _get_pk():
+    return globals().get("pk", {
+        "bg": "#FFF5F8",
+        "d": "#C45B83",
+        "m": "#D98BA9",
+        "s": "#B65C83",
+        "slate": "#8B9BAA",
+        "xl": "#F3C6D5",
+        "txt": "#59434D",
+        "l": "#E8B7CA"
+    })
+
+
+# ============================================================
+# MULTIVARIATE SCATTER PLOT
+# ============================================================
+
+def plot_mv_scatter(d, x, y, col, size, facet, lines):
+
+    pk = _get_pk()
+
+    hasc = not _none(col)
+    hass = not _none(size)
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    if hasc:
+        if pd.api.types.is_numeric_dtype(d[col]):
+            sc = ax.scatter(
+                d[x], d[y],
+                c=d[col],
+                cmap="pink",
+                alpha=0.6,
+                s=40 if not hass else None
+            )
+
+            if hass:
+                sc.set_sizes(
+                    20 + 100 * (
+                        (d[size] - d[size].min()) /
+                        (d[size].max() - d[size].min() + 1e-10)
+                    )
+                )
+
+            fig.colorbar(sc, ax=ax, label=col)
+
+        else:
+            categories = d[col].dropna().unique()
+            palette = _palette(len(categories))
+
+            for category, color in zip(categories, palette):
+                subset = d[d[col] == category]
+
+                ax.scatter(
+                    subset[x],
+                    subset[y],
+                    color=color,
+                    alpha=0.6,
+                    s=40 if not hass else (
+                        20 + 100 * (
+                            (subset[size] - d[size].min()) /
+                            (d[size].max() - d[size].min() + 1e-10)
+                        )
+                    ),
+                    label=str(category)
+                )
+
+            ax.legend(title=col)
+
+    else:
+        if hass:
+            sc = ax.scatter(
+                d[x], d[y],
+                c=pk["m"],
+                s=20 + 100 * (
+                    (d[size] - d[size].min()) /
+                    (d[size].max() - d[size].min() + 1e-10)
+                ),
+                alpha=0.5
+            )
+        else:
+            ax.scatter(
+                d[x], d[y],
+                color=pk["m"],
+                alpha=0.6,
+                s=30
+            )
+
+    if hass and not hasc:
+        ax.set_title(f"Ukuran titik: {size}")
+
+    if lines:
+        if hasc and not pd.api.types.is_numeric_dtype(d[col]):
+            for category, color in zip(
+                d[col].dropna().unique(),
+                _palette(d[col].nunique())
+            ):
+                subset = d[d[col] == category].dropna(subset=[x, y])
+
+                if len(subset) >= 2:
+                    sns.regplot(
+                        data=subset,
+                        x=x,
+                        y=y,
+                        scatter=False,
+                        ci=None,
+                        color=color,
+                        line_kws={"linewidth": 1}
+                    )
+        else:
+            sns.regplot(
+                data=d,
+                x=x,
+                y=y,
+                scatter=False,
+                ci=None,
+                color=pk["d"],
+                line_kws={"linewidth": 1.5},
+                ax=ax
+            )
+
+    if not _none(facet):
+        plt.close(fig)
+
+        g = sns.relplot(
+            data=d,
+            x=x,
+            y=y,
+            hue=col if hasc else None,
+            size=size if hass else None,
+            col=facet,
+            kind="scatter",
+            alpha=0.6,
+            height=4,
+            aspect=1.2
+        )
+
+        if lines:
+            g.map_dataframe(
+                sns.regplot,
+                x=x,
+                y=y,
+                scatter=False,
+                ci=None,
+                color=pk["d"]
+            )
+
+        g.set_axis_labels(x, y)
+        g.fig.suptitle(
+            f"{y} terhadap {x}",
+            y=1.04,
+            fontweight="bold"
+        )
+
+        return g.fig
+
+    ax.set_title(f"{y} terhadap {x}")
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+
+    ax.text(
+        0.5, 1.02,
+        f"Warna: {col} | Ukuran: {size} | Panel: {facet}",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+
+    plt.tight_layout()
+    return fig
+
+
+# ============================================================
+# MULTIVARIATE HEATMAP DATA
+# ============================================================
+
+def mv_heat_data(d, a, b, num, fun):
+
+    if fun == "Rata-rata":
+        v = d[num]
+        f = "mean"
+
+    elif fun == "Median":
+        v = d[num]
+        f = "median"
+
+    elif fun == "Jumlah":
+        v = d[num]
+        f = "sum"
+
+    elif fun == "Banyak transaksi":
+        v = d[a]
+        f = "count"
+
+    else:
+        raise ValueError("Fungsi agregasi tidak dikenal.")
+
+    temp = d.copy()
+    temp["_value"] = v
+
+    res = (
+        temp.groupby([a, b], observed=False)["_value"]
+        .agg(f)
+        .reset_index()
+    )
+
+    res.columns = ["A", "B", "val"]
+
+    return res
+
+
+# ============================================================
+# MULTIVARIATE HEATMAP
+# ============================================================
+
+def plot_mv_heat(d, a, b, num, fun):
+
+    pk = _get_pk()
+
+    res = mv_heat_data(d, a, b, num, fun)
+
+    mid = (res["val"].max() + res["val"].min()) / 2
+
+    lab = (
+        "Banyak transaksi"
+        if fun == "Banyak transaksi"
+        else f"{fun} {num}"
+    )
+
+    tab = res.pivot(
+        index="B",
+        columns="A",
+        values="val"
+    )
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    sns.heatmap(
+        tab,
+        annot=True,
+        fmt=".0f" if fun == "Banyak transaksi" else ".1f",
+        linewidths=1,
+        linecolor="white",
+        cmap=sns.light_palette(pk["d"], as_cmap=True),
+        cbar_kws={"label": lab},
+        ax=ax
+    )
+
+    for text in ax.texts:
+        try:
+            value = float(text.get_text())
+            text.set_color(
+                "white" if value > mid else pk["txt"]
+            )
+            text.set_fontweight("bold")
+        except ValueError:
+            pass
+
+    ax.set_title(lab)
+    ax.set_xlabel(a)
+    ax.set_ylabel(b)
+
+    fig.text(
+        0.5, 0.94,
+        f"menurut {a} dan {b}",
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# CORRELATION MATRIX
+# ============================================================
+
+def plot_mv_cor(d, vars, method):
+
+    pk = _get_pk()
+
+    m = d[vars].corr(method=method)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    sns.heatmap(
+        m,
+        annot=True,
+        fmt=".2f",
+        linewidths=1,
+        linecolor="white",
+        cmap=sns.diverging_palette(
+            240, 340, as_cmap=True
+        ),
+        center=0,
+        vmin=-1,
+        vmax=1,
+        cbar_kws={"label": "r"},
+        ax=ax
+    )
+
+    for text in ax.texts:
+        text.set_color(pk["txt"])
+        text.set_fontweight("bold")
+        text.set_fontsize(11)
+
+    ax.set_title(
+        f"Matriks korelasi {method.title()}",
+        fontweight="bold"
+    )
+
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# TREND DATA
+# ============================================================
+
+def trend_data(d, metric, unit, grp):
+
+    temp = d.copy()
+
+    temp["Date"] = pd.to_datetime(temp["Date"])
+
+    if unit == "Harian":
+        temp["Periode"] = temp["Date"].dt.normalize()
+
+    elif unit == "Mingguan":
+        temp["Periode"] = (
+            temp["Date"]
+            .dt.to_period("W-SUN")
+            .dt.start_time
+        )
+
+    elif unit == "Bulanan":
+        temp["Periode"] = (
+            temp["Date"]
+            .dt.to_period("M")
+            .dt.start_time
+        )
+
+    else:
+        raise ValueError("Unit periode tidak dikenal.")
+
+    if metric == "Jumlah transaksi":
+        temp["_val"] = 1
+        agg = "sum"
+
+    elif metric == "Total penjualan (jumlah)":
+        temp["_val"] = temp["Total"]
+        agg = "sum"
+
+    elif metric == "Rata-rata Total":
+        temp["_val"] = temp["Total"]
+        agg = "mean"
+
+    elif metric == "Rata-rata Rating":
+        temp["_val"] = temp["Rating"]
+        agg = "mean"
+
+    elif metric == "Total Quantity":
+        temp["_val"] = temp["Quantity"]
+        agg = "sum"
+
+    else:
+        raise ValueError("Metrik tidak dikenal.")
+
+    group_cols = ["Periode"]
+
+    if not _none(grp):
+        group_cols.append(grp)
+
+    td = (
+        temp.groupby(group_cols, observed=False)["_val"]
+        .agg(agg)
+        .reset_index(name="val")
+    )
+
+    return td
+
+
+# ============================================================
+# TREND PLOT
+# ============================================================
+
+def plot_mv_trend(d, metric, unit, grp):
+
+    pk = _get_pk()
+
+    td = trend_data(d, metric, unit, grp)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    if _none(grp):
+
+        td = td.sort_values("Periode")
+
+        ax.plot(
+            td["Periode"],
+            td["val"],
+            color=pk["d"],
+            linewidth=1.5
+        )
+
+        ax.scatter(
+            td["Periode"],
+            td["val"],
+            color=pk["m"],
+            s=25
+        )
+
+    else:
+
+        categories = d[grp].dropna().unique()
+        palette = _palette(len(categories))
+
+        for category, color in zip(categories, palette):
+
+            subset = td[td[grp] == category].sort_values("Periode")
+
+            ax.plot(
+                subset["Periode"],
+                subset["val"],
+                color=color,
+                linewidth=1.5,
+                label=str(category)
+            )
+
+            ax.scatter(
+                subset["Periode"],
+                subset["val"],
+                color=color,
+                s=20
+            )
+
+        ax.legend(title=grp)
+
+    subtitle = (
+        "Minggu pertama/terakhir dapat tidak lengkap"
+        if unit == "Mingguan"
+        else ""
+    )
+
+    ax.set_title(metric + " " + unit)
+    ax.set_xlabel("Periode")
+    ax.set_ylabel(metric)
+
+    if subtitle:
+        ax.text(
+            0.5, 1.02,
+            subtitle,
+            transform=ax.transAxes,
+            ha="center",
+            fontsize=9
+        )
+
+    fig.autofmt_xdate()
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# PRINCIPAL COMPONENT ANALYSIS
+# ============================================================
+
+def pca_fit(d, vars):
+
+    model = PCA()
+
+    X = d[vars].astype(float)
+
+    X_scaled = (
+        X - X.mean()
+    ) / X.std(ddof=0).replace(0, 1)
+
+    scores = model.fit_transform(X_scaled)
+
+    return model, scores
+
+
+# ============================================================
+# PCA BIPLOT
+# ============================================================
+
+def plot_mv_pca(d, vars, colv):
+
+    pk = _get_pk()
+
+    pr, scores = pca_fit(d, vars)
+
+    sc = pd.DataFrame(
+        scores[:, :2],
+        columns=["PC1", "PC2"],
+        index=d.index
+    )
+
+    ve = pr.explained_variance_ratio_ * 100
+
+    ld = pd.DataFrame(
+        pr.components_[:2].T,
+        columns=["PC1", "PC2"],
+        index=vars
+    )
+
+    k = min(
+        sc["PC1"].abs().max(),
+        sc["PC2"].abs().max()
+    ) * 0.85
+
+    ld["PC1"] *= k
+    ld["PC2"] *= k
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    if not _none(colv):
+
+        categories = d[colv].dropna().unique()
+        palette = _palette(len(categories))
+
+        for category, color in zip(categories, palette):
+
+            idx = d[colv] == category
+
+            ax.scatter(
+                sc.loc[idx, "PC1"],
+                sc.loc[idx, "PC2"],
+                color=color,
+                alpha=0.6,
+                s=30,
+                label=str(category)
+            )
+
+        ax.legend(title=colv)
+
+    else:
+
+        ax.scatter(
+            sc["PC1"],
+            sc["PC2"],
+            color=pk["m"],
+            alpha=0.5,
+            s=30
+        )
+
+    for variable, row in ld.iterrows():
+
+        ax.annotate(
+            "",
+            xy=(row["PC1"], row["PC2"]),
+            xytext=(0, 0),
+            arrowprops={
+                "arrowstyle": "->",
+                "color": pk["d"],
+                "lw": 1.3
+            }
+        )
+
+        ax.text(
+            row["PC1"],
+            row["PC2"],
+            variable,
+            color=pk["d"],
+            fontweight="bold",
+            ha="center",
+            va="bottom"
+        )
+
+    ax.axhline(0, color="gray", linewidth=0.5)
+    ax.axvline(0, color="gray", linewidth=0.5)
+
+    ax.set_title("PCA biplot")
+    ax.set_xlabel(f"PC1 ({ve[0]:.1f}%)")
+    ax.set_ylabel(f"PC2 ({ve[1]:.1f}%)")
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# SCATTERPLOT MATRIX / PAIRS PLOT
+# ============================================================
+
+def plot_mv_pairs(d, vars, colv):
+
+    pk = _get_pk()
+
+    n = len(vars)
+
+    if n < 2:
+        raise ValueError("Pilih minimal dua variabel numerik.")
+
+    grp = None if _none(colv) else d[colv]
+
+    fig, axes = plt.subplots(
+        n, n,
+        figsize=(3 * n, 3 * n),
+        squeeze=False
+    )
+
+    categories = (
+        grp.dropna().unique()
+        if grp is not None else [None]
+    )
+
+    palette = _palette(len(categories))
+
+    for i, y in enumerate(vars):
+
+        for j, x in enumerate(vars):
+
+            ax = axes[i, j]
+
+            if i == j:
+
+                sns.histplot(
+                    data=d,
+                    x=x,
+                    color=pk["xl"],
+                    edgecolor="white",
+                    ax=ax
+                )
+
+            elif i > j:
+
+                if grp is None:
+
+                    subset = d[[x, y]].dropna()
+
+                    ax.scatter(
+                        subset[x],
+                        subset[y],
+                        color=pk["m"],
+                        alpha=0.55,
+                        s=15
+                    )
+
+                    if len(subset) >= 3:
+                        sm = lowess(
+                            subset[y],
+                            subset[x],
+                            frac=0.6
+                        )
+
+                        ax.plot(
+                            sm[:, 0],
+                            sm[:, 1],
+                            color=pk["d"],
+                            linewidth=1.5
+                        )
+
+                else:
+
+                    for category, color in zip(categories, palette):
+
+                        subset = d[d[colv] == category][[x, y]].dropna()
+
+                        ax.scatter(
+                            subset[x],
+                            subset[y],
+                            color=color,
+                            alpha=0.55,
+                            s=15,
+                            label=str(category)
+                        )
+
+                        if len(subset) >= 3:
+                            sm = lowess(
+                                subset[y],
+                                subset[x],
+                                frac=0.6
+                            )
+
+                            ax.plot(
+                                sm[:, 0],
+                                sm[:, 1],
+                                color=pk["d"],
+                                linewidth=1.2
+                            )
+
+            else:
+
+                subset = d[[x, y]].dropna()
+
+                if len(subset) > 1:
+
+                    r = subset[x].corr(subset[y])
+
+                    ax.text(
+                        0.5, 0.5,
+                        f"r = {r:.2f}",
+                        transform=ax.transAxes,
+                        ha="center",
+                        va="center",
+                        fontsize=12 + 12 * abs(r),
+                        color=pk["d"],
+                        fontweight="bold"
+                    )
+
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+            if i == n - 1:
+                ax.set_xlabel(x)
+
+            else:
+                ax.set_xlabel("")
+
+            if j == 0:
+                ax.set_ylabel(y)
+
+            else:
+                ax.set_ylabel("")
+
+            _theme(ax, 8)
+
+    fig.suptitle(
+        "Scatterplot matrix (pairs plot)",
+        fontsize=14,
+        fontweight="bold",
+        color=pk["d"]
+    )
+
+    if grp is not None:
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+
+        if handles:
+            fig.legend(
+                handles,
+                labels,
+                title=colv,
+                loc="lower center",
+                ncol=min(len(labels), 5),
+                frameon=False
+            )
+
+    plt.tight_layout(rect=[0, 0.04, 1, 0.96])
+
+    return fig
+
+
+# ============================================================
+# MAHALANOBIS DISTANCE
+# ============================================================
+
+def mahal_fit(d, vars):
+
+    X = d[vars].astype(float).dropna()
+
+    if len(X) != len(d):
+        raise ValueError(
+            "Terdapat missing value pada variabel yang dipilih. "
+            "Tangani missing value terlebih dahulu."
+        )
+
+    X = X.to_numpy()
+
+    p = len(vars)
+
+    if p < 2:
+        raise ValueError(
+            "Pilih minimal dua variabel numerik."
+        )
+
+    if np.linalg.matrix_rank(np.cov(X, rowvar=False)) < p:
+        raise ValueError(
+            "Matriks kovarians singular (ada variabel yang "
+            "bergantung linear). Kurangi variabel yang dipilih."
+        )
+
+    mean = np.mean(X, axis=0)
+
+    cov = np.cov(X, rowvar=False)
+
+    inv_cov = np.linalg.inv(cov)
+
+    diff = X - mean
+
+    D2 = np.einsum(
+        "ij,jk,ik->i",
+        diff,
+        inv_cov,
+        diff
+    )
+
+    cut = chi2.ppf(0.975, df=p)
+
+    df = pd.DataFrame({
+        "idx": np.arange(1, len(X) + 1),
+        "D2": D2,
+        "pval": chi2.sf(D2, df=p),
+        "out": D2 > cut
+    })
+
+    return {
+        "df": df,
+        "cut": cut,
+        "p": p,
+        "X": X
+    }
+
+
+# ============================================================
+# MAHALANOBIS DISTANCE INDEX PLOT
+# ============================================================
+
+def plot_mv_mahal_idx(f):
+
+    pk = _get_pk()
+
+    df = f["df"].copy()
+
+    df["Status"] = np.where(
+        df["out"],
+        "Pencilan",
+        "Normal"
+    )
+
+    o = (
+        df[df["out"]]
+        .sort_values("D2", ascending=False)
+        .head(5)
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    colors = {
+        "Normal": pk["l"],
+        "Pencilan": pk["d"]
+    }
+
+    for status, color in colors.items():
+
+        subset = df[df["Status"] == status]
+
+        ax.scatter(
+            subset["idx"],
+            subset["D2"],
+            color=color,
+            alpha=0.7,
+            s=30,
+            label=status
+        )
+
+    ax.axhline(
+        f["cut"],
+        linestyle="--",
+        color=pk["d"],
+        linewidth=1.2
+    )
+
+    for _, row in o.iterrows():
+
+        ax.text(
+            row["idx"],
+            row["D2"],
+            str(row["idx"]),
+            fontsize=8,
+            ha="center",
+            va="bottom"
+        )
+
+    percentage = 100 * df["out"].mean()
+
+    ax.set_title("Jarak Mahalanobis (D2) per observasi")
+
+    ax.set_xlabel("Indeks observasi")
+    ax.set_ylabel("D2 (kuadrat jarak Mahalanobis)")
+
+    ax.text(
+        0.5, 1.03,
+        (
+            f"Garis putus-putus = batas Chi-Square 97.5% "
+            f"(df = {f['p']}): {f['cut']:.2f} | "
+            f"Pencilan: {df['out'].sum()} ({percentage:.1f}%)"
+        ),
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    ax.legend(title="Status")
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# MAHALANOBIS SCATTER PLOT
+# ============================================================
+
+def plot_mv_mahal_sc(f, vars):
+
+    pk = _get_pk()
+
+    df = pd.DataFrame({
+        "x": f["X"][:, 0],
+        "y": f["X"][:, 1],
+        "Status": np.where(
+            f["df"]["out"],
+            "Pencilan",
+            "Normal"
+        )
+    })
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    colors = {
+        "Normal": pk["l"],
+        "Pencilan": pk["d"]
+    }
+
+    sizes = {
+        "Normal": 30,
+        "Pencilan": 65
+    }
+
+    for status in ["Normal", "Pencilan"]:
+
+        subset = df[df["Status"] == status]
+
+        ax.scatter(
+            subset["x"],
+            subset["y"],
+            color=colors[status],
+            s=sizes[status],
+            alpha=0.65,
+            label=status
+        )
+
+    ax.set_title(
+        "Pencilan multivariat pada ruang dua variabel"
+    )
+
+    ax.set_xlabel(vars[0])
+    ax.set_ylabel(vars[1])
+
+    ax.text(
+        0.5, 1.02,
+        f"Ditampilkan: {vars[0]} dan {vars[1]} "
+        "(dua variabel pertama yang dipilih)",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    ax.legend(title="Status")
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# MAHALANOBIS TABLE
+# ============================================================
+
+def mahal_table(d, f, vars):
+
+    df = f["df"].copy()
+
+    o = (
+        df.sort_values("D2", ascending=False)
+        .head(10)
+        .copy()
+    )
+
+    out = pd.DataFrame({
+        "Baris": o["idx"].values,
+        "D2": [
+            _format(v, 2) for v in o["D2"]
+        ],
+        "p-value": [
+            _format(v, 4) for v in o["pval"]
+        ],
+        "Status": np.where(
+            o["out"],
+            "Pencilan",
+            "Normal"
+        )
+    })
+
+    for v in vars:
+
+        out[v] = [
+            _format(d[v].iloc[int(i) - 1], 1)
+            for i in o["idx"]
+        ]
+
+    return out
+
+
+# ============================================================
+# Q-Q PLOT CHI-SQUARE
+# ============================================================
+
+def plot_mv_qqchi(f):
+
+    pk = _get_pk()
+
+    df = f["df"].copy()
+
+    n = len(df)
+
+    o = np.argsort(df["D2"].values)
+
+    s = pd.DataFrame({
+        "D2": df["D2"].values[o],
+        "idx": df["idx"].values[o],
+        "out": df["out"].values[o]
+    })
+
+    s["q"] = chi2.ppf(
+        (np.arange(1, n + 1) - 0.5) / n,
+        df=f["p"]
+    )
+
+    s["Status"] = np.where(
+        s["out"],
+        "Pencilan",
+        "Normal"
+    )
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    colors = {
+        "Normal": pk["m"],
+        "Pencilan": pk["d"]
+    }
+
+    for status, color in colors.items():
+
+        subset = s[s["Status"] == status]
+
+        ax.scatter(
+            subset["q"],
+            subset["D2"],
+            color=color,
+            alpha=0.7,
+            s=35,
+            label=status
+        )
+
+    max_val = max(
+        s["q"].max(),
+        s["D2"].max()
+    )
+
+    ax.plot(
+        [0, max_val],
+        [0, max_val],
+        color=pk["d"],
+        linewidth=1.2
+    )
+
+    for _, row in s.tail(3).iterrows():
+
+        ax.text(
+            row["q"],
+            row["D2"],
+            str(row["idx"]),
+            fontsize=8,
+            va="bottom"
+        )
+
+    ax.set_title("Q-Q plot Chi-Square")
+
+    ax.set_xlabel("Kuantil teoretis Chi-Square")
+    ax.set_ylabel("D2 terurut (sampel)")
+
+    ax.text(
+        0.5, 1.03,
+        (
+            f"D2 terurut vs kuantil Chi-Square "
+            f"(df = {f['p']}); titik di sekitar garis = "
+            "mendekati normal multivariat"
+        ),
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    ax.legend(title="Status")
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
 
 # =============================================================================
 # 5. REGRESI LINEAR BERGANDA
