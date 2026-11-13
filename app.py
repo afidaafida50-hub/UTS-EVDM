@@ -11,13 +11,13 @@ NIM       = "231064005"
 APP_TITLE = "Dashboard Analisis Data Penjualan"
 SUMBER_DATA = "Dataset sekunder data transaksi supermarket (Data_Penjualan.xlsx). Isi dengan tautan/sumber asli yang dapat dipertanggungjawabkan (mis. Kaggle: Supermarket Sales)."
 LATAR_BELAKANG = "Supermarket perlu memahami faktor yang berkaitan dengan besarnya nilai transaksi agar strategi promosi, penataan produk, dan pelayanan dapat dirancang berdasarkan data. Nilai transaksi dapat dipengaruhi oleh jumlah barang yang dibeli, karakteristik pelanggan, lini produk, cabang, metode pembayaran, dan waktu transaksi. Analisis eksplorasi dan regresi linear berganda digunakan untuk mengidentifikasi faktor-faktor tersebut."
-TUJUAN = c(
+TUJUAN = [
   "Menggambarkan karakteristik setiap variabel pada data transaksi (univariat).",
   "Mengidentifikasi hubungan dan perbedaan kelompok antar dua variabel (bivariat).",
   "Mengeksplorasi pola yang melibatkan tiga variabel atau lebih (multivariat).",
   "Membangun model regresi linear berganda untuk menjelaskan nilai transaksi (Total) dan mengevaluasi kemampuannya.",
   "Merumuskan kesimpulan dan rekomendasi bagi pengelola supermarket."
-)
+]
 
 # ---- Konstanta variabel ------------------------------------------------------
 cat_base = c("Branch", "Customer type", "Gender", "Product line", "Payment")
