@@ -6429,7 +6429,7 @@ with st.sidebar:
         max_value=date_max,
         format="DD-MM-YYYY",
         key="filter_date_range"
-    )
+      )
       else:
         f_date = None
 
