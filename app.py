@@ -5422,6 +5422,25 @@ st.sidebar.caption(
 # ============================================================
 
 cat_all = [
+    "Branch",
+    "Customer type",
+    "Gender",
+    "Product line",
+    "Payment",
+    "Bulan",
+    "Hari"
+]
+
+num_all = [
+    "Unit price",
+    "Quantity",
+    "Tax 5%",
+    "Total",
+    "Rating",
+    "Hour"
+]
+
+cat_all = [
     col for col in cat_all
     if col in d.columns
 ]
@@ -5437,7 +5456,6 @@ cat_base = [
 ]
 
 NONE = "Tidak ada"
-
 
 # ============================================================
 # TAB UTAMA
