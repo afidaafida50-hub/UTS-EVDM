@@ -6422,15 +6422,16 @@ with st.sidebar:
     )
 
     if date_min is not None:
-        f_date = st.date_input(
-            "Rentang tanggal",
-            value=(date_min, date_max),
-            min_value=date_min,
-            max_value=date_max,
-            format="DD-MM-YYYY"
-        )
-    else:
-        f_date = None
+    f_date = st.date_input(
+        "Rentang tanggal",
+        value=(date_min, date_max),
+        min_value=date_min,
+        max_value=date_max,
+        format="DD-MM-YYYY",
+        key="filter_date_range"
+    )
+else:
+    f_date = None
 
 
 st.session_state["reset_filter"] = False
