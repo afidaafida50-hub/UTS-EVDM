@@ -212,18 +212,109 @@ def rot(ax):
 
     return ax
 # ---- Fungsi bantu ------------------------------------------------------------
-fmt   <- function(x, k = 2) formatC(x, format = "f", digits = k, big.mark = ",")
-fmt_p <- function(p) ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p))
-pq    <- function(p) ifelse(p < 0.001, "< 0.001", paste("=", sprintf("%.3f", p)))   # untuk kalimat: "p < 0.001" / "p = 0.019"
-stars <- function(p) ifelse(p < 0.001, "***", ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", ifelse(p < 0.1, ".", ""))))
-skew_fun <- function(x) { x <- x[!is.na(x)]; n <- length(x); n / ((n-1)*(n-2)) * sum(((x-mean(x))/sd(x))^3) }
-kurt_fun <- function(x) {
-  x <- x[!is.na(x)]; n <- length(x); z <- (x - mean(x)) / sd(x)
-  n*(n+1)/((n-1)*(n-2)*(n-3)) * sum(z^4) - 3*(n-1)^2/((n-2)*(n-3))
-}
-md <- function(x) HTML(gsub("\\*\\*(.+?)\\*\\*", "<b>\\1</b>", x))
-bullets <- function(lines) tags$ul(lapply(lines, function(l) tags$li(md(l))))
-strength <- function(r) { a <- abs(r); if (a < .2) "sangat lemah" else if (a < .4) "lemah" else if (a < .6) "sedang" else if (a < .8) "kuat" else "sangat kuat" }
+import numpy as np
+import pandas as pd
+import re
+
+
+# Format angka dengan pemisah ribuan dan desimal
+def fmt(x, k=2):
+    if pd.isna(x):
+        return "-"
+    return f"{x:,.{k}f}"
+
+
+# Format p-value
+def fmt_p(p):
+    if pd.isna(p):
+        return "-"
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+
+# Format p-value untuk kalimat
+def pq(p):
+    if pd.isna(p):
+        return "p tidak tersedia"
+    return "< 0.001" if p < 0.001 else f"= {p:.3f}"
+
+
+# Tanda signifikansi
+def stars(p):
+    if pd.isna(p):
+        return ""
+    if p < 0.001:
+        return "***"
+    elif p < 0.01:
+        return "**"
+    elif p < 0.05:
+        return "*"
+    elif p < 0.1:
+        return "."
+    else:
+        return ""
+
+
+# Fungsi skewness
+def skew_fun(x):
+    x = np.asarray(x, dtype=float)
+    x = x[~np.isnan(x)]
+
+    n = len(x)
+
+    if n < 3 or np.std(x, ddof=1) == 0:
+        return np.nan
+
+    z = (x - np.mean(x)) / np.std(x, ddof=1)
+
+    return (
+        n / ((n - 1) * (n - 2))
+        * np.sum(z ** 3)
+    )
+
+
+# Fungsi kurtosis
+def kurt_fun(x):
+    x = np.asarray(x, dtype=float)
+    x = x[~np.isnan(x)]
+
+    n = len(x)
+
+    if n < 4 or np.std(x, ddof=1) == 0:
+        return np.nan
+
+    z = (x - np.mean(x)) / np.std(x, ddof=1)
+
+    return (
+        n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))
+        * np.sum(z ** 4)
+        - 3 * (n - 1) ** 2 / ((n - 2) * (n - 3))
+    )
+
+
+# Format teks dengan bold
+def md(x):
+    return str(x)
+
+
+# Membuat bullet points
+def bullets(lines):
+    return "\n".join([f"- {line}" for line in lines])
+
+
+# Interpretasi kekuatan korelasi
+def strength(r):
+    a = abs(r)
+
+    if a < 0.2:
+        return "sangat lemah"
+    elif a < 0.4:
+        return "lemah"
+    elif a < 0.6:
+        return "sedang"
+    elif a < 0.8:
+        return "kuat"
+    else:
+        return "sangat kuat"
 
 # =============================================================================
 # 2. UNIVARIAT
