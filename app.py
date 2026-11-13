@@ -319,101 +319,825 @@ def strength(r):
 # =============================================================================
 # 2. UNIVARIAT
 # =============================================================================
-uni_choices <- function(v) {
-  if (v == "Date") "Deret waktu harian"
-  else if (v %in% cat_all) c("Diagram batang", "Pareto", "Diagram lingkaran")
-  else c("Histogram", "Histogram + Density", "Boxplot", "Density", "Stem-and-leaf", "QQ-plot")
-}
+def uni_choices(v):
+    if v == "Date":
+        return ["Deret waktu harian"]
 
-plot_uni <- function(d, v, type) {
-  if (v == "Date") {
-    dd <- d %>% count(Date)
-    return(ggplot(dd, aes(Date, n)) + geom_line(colour = pk$l) + geom_point(colour = pk$m, size = 1.5) +
-             geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = pk$d) +
-             labs(title = "Jumlah transaksi per hari", subtitle = "Garis tebal = tren (loess)", x = "Tanggal", y = "Jumlah transaksi") + theme_pink())
-  }
-  if (v %in% cat_all) {
-    tab <- as.data.frame(table(d[[v]])); names(tab) <- c("Kategori", "n")
-    tab$pct <- 100 * tab$n / sum(tab$n)
-    if (type == "Diagram lingkaran") {
-      return(ggplot(tab, aes(x = "", y = n, fill = Kategori)) + geom_col(width = 1, colour = "white") + coord_polar("y") +
-               geom_text(aes(label = paste0(round(pct, 1), "%")), position = position_stack(vjust = .5), colour = "white", fontface = "bold") +
-               scale_fill_manual(values = pal_cat(nrow(tab))) + labs(title = paste("Proporsi", v), fill = v) + theme_void(base_size = 12) +
-               theme(plot.title = element_text(face = "bold", colour = pk$d, size = 14), plot.background = element_rect(fill = "white", colour = NA)))
-    }
-    if (type == "Pareto") {
-      tab <- tab[order(-tab$n), ]; tab$Kategori <- factor(tab$Kategori, levels = tab$Kategori)
-      tab$kum <- cumsum(tab$n) / sum(tab$n) * 100; tot <- sum(tab$n)
-      return(ggplot(tab, aes(Kategori)) + geom_col(aes(y = n), fill = pk$l, width = .7) +
-               geom_line(aes(y = kum * tot / 100, group = 1), colour = pk$d, linewidth = 1) + geom_point(aes(y = kum * tot / 100), colour = pk$d, size = 2.4) +
-               geom_text(aes(y = kum * tot / 100, label = paste0(round(kum, 1), "%")), vjust = -.9, size = 3.4, colour = pk$mauve) +
-               scale_y_continuous(limits = c(0, tot * 1.1), sec.axis = sec_axis(~ . / tot * 100, name = "Kumulatif (%)")) +
-               labs(title = paste("Pareto", v), x = v, y = "Frekuensi") + theme_pink() + rot)
-    }
-    return(ggplot(tab, aes(Kategori, n, fill = Kategori)) + geom_col(show.legend = FALSE, width = .7) +
-             geom_text(aes(label = n), vjust = -.4, colour = pk$mauve, fontface = "bold") +
-             scale_fill_manual(values = pal_cat(nrow(tab))) + scale_y_continuous(expand = expansion(mult = c(0, .1))) +
-             labs(title = paste("Frekuensi", v), x = v, y = "Frekuensi") + theme_pink() + rot)
-  }
-  bw <- v %in% c("Quantity", "Hour")
-  hist_l <- function(dens) {
-    if (bw) { if (dens) geom_histogram(aes(y = after_stat(density)), binwidth = 1, boundary = .5, fill = pk$xl, colour = "white")
-      else geom_histogram(binwidth = 1, boundary = .5, fill = pk$xl, colour = "white") }
-    else { if (dens) geom_histogram(aes(y = after_stat(density)), bins = 25, fill = pk$xl, colour = "white")
-      else geom_histogram(bins = 25, fill = pk$xl, colour = "white") }
-  }
-  g <- ggplot(d, aes(x = .data[[v]]))
-  if (type == "Histogram + Density") return(g + hist_l(TRUE) + geom_density(colour = pk$d, linewidth = 1.1) + labs(title = paste("Histogram dan Density", v), x = v, y = "Densitas") + theme_pink())
-  if (type == "Density") return(g + geom_density(fill = pk$l, colour = pk$d, alpha = .5) + geom_vline(xintercept = mean(d[[v]]), linetype = "dashed", colour = pk$mauve) +
-                                  labs(title = paste("Density", v), subtitle = "Garis putus-putus = rata-rata", x = v, y = "Densitas") + theme_pink())
-  if (type == "Boxplot") return(ggplot(d, aes(x = "", y = .data[[v]])) + geom_boxplot(fill = pk$xl, colour = pk$d, width = .45, outlier.colour = pk$m) +
-                                  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.5, fill = "white", colour = pk$d) + coord_flip() +
-                                  labs(title = paste("Boxplot", v), subtitle = "Berlian = rata-rata; titik = pencilan", x = NULL, y = v) + theme_pink())
-  if (type == "QQ-plot") return(ggplot(d, aes(sample = .data[[v]])) + stat_qq(colour = pk$m, alpha = .6) + stat_qq_line(colour = pk$d) +
-                                  labs(title = paste("QQ-plot", v), subtitle = "Titik mengikuti garis = mendekati normal", x = "Kuantil teoretis", y = "Kuantil sampel") + theme_pink())
-  g + hist_l(FALSE) + labs(title = paste("Distribusi", v), x = v, y = "Frekuensi") + theme_pink()
-}
+    elif v in cat_all:
+        return [
+            "Diagram batang",
+            "Pareto",
+            "Diagram lingkaran"
+        ]
 
-uni_table <- function(d, v) {
-  if (v == "Date") {
-    return(data.frame(Statistik = c("Tanggal awal", "Tanggal akhir", "Jumlah hari", "Jumlah hari dengan transaksi", "Rata-rata transaksi per hari"),
-                      Nilai = c(as.character(min(d$Date)), as.character(max(d$Date)), as.character(as.integer(diff(range(d$Date))) + 1),
-                                as.character(length(unique(d$Date))), fmt(nrow(d) / length(unique(d$Date))))))
-  }
-  if (v %in% cat_all) {
-    t <- table(d[[v]]); out <- data.frame(Kategori = names(t), Frekuensi = as.integer(t), `Persentase (%)` = fmt(100 * as.numeric(t) / sum(t)), check.names = FALSE)
-    return(out)
-  }
-  x <- d[[v]]; q <- quantile(x, c(.25, .75)); iqr <- q[2] - q[1]
-  lo <- q[1] - 1.5 * iqr; hi <- q[2] + 1.5 * iqr
-  data.frame(Statistik = c("N", "Rata-rata", "Median", "Simpangan baku", "Variansi", "Koef. variasi (%)", "Minimum", "Q1", "Q3", "Maksimum",
-                           "IQR", "Skewness", "Kurtosis (excess)", "Batas pencilan bawah", "Batas pencilan atas", "Jumlah pencilan"),
-             Nilai = c(length(x), fmt(mean(x)), fmt(median(x)), fmt(sd(x)), fmt(var(x)), fmt(100 * sd(x) / mean(x)), fmt(min(x)), fmt(q[1]), fmt(q[2]),
-                       fmt(max(x)), fmt(iqr), fmt(skew_fun(x), 3), fmt(kurt_fun(x), 3), fmt(lo), fmt(hi), sum(x < lo | x > hi)))
-}
+    else:
+        return [
+            "Histogram",
+            "Histogram + Density",
+            "Boxplot",
+            "Density",
+            "Stem-and-leaf",
+            "QQ-plot"
+        ]
 
-interp_uni <- function(d, v) {
-  if (v == "Date") {
-    dd <- d %>% count(Date); top <- dd[which.max(dd$n), ]
-    return(c(sprintf("Data mencakup **%s** sampai **%s** (%d hari bertransaksi).", min(d$Date), max(d$Date), nrow(dd)),
-             sprintf("Rata-rata **%s** transaksi per hari; puncak pada **%s** dengan **%d** transaksi.", fmt(mean(dd$n)), top$Date, top$n),
-             "Garis tren (loess) menunjukkan apakah volume transaksi harian meningkat, menurun, atau relatif stabil sepanjang periode."))
-  }
-  if (v %in% cat_all) {
-    t <- sort(table(d[[v]]), decreasing = TRUE); p <- 100 * t / sum(t)
-    sp <- max(p) - min(p)
-    return(c(sprintf("Kategori terbanyak: **%s** (%d transaksi; %s%%). Tersedikit: **%s** (%d; %s%%).", names(t)[1], t[1], fmt(p[1], 1), names(t)[length(t)], t[length(t)], fmt(p[length(p)], 1)),
-             sprintf("Selisih proporsi tertinggi dan terendah **%s** poin persentase, sehingga sebaran kategori **%s**.", fmt(sp, 1), if (sp < 5) "relatif seimbang" else "tidak seimbang"),
-             "Pareto menunjukkan apakah sedikit kategori mendominasi (garis kumulatif cepat mencapai 80%)."))
-  }
-  x <- d[[v]]; m <- mean(x); me <- median(x); s <- sd(x); sk <- skew_fun(x); ku <- kurt_fun(x)
-  q <- quantile(x, c(.25, .75)); iqr <- q[2] - q[1]; out <- sum(x < q[1] - 1.5 * iqr | x > q[2] + 1.5 * iqr)
-  shape <- if (abs(sk) < .5) "hampir simetris" else if (sk > 0) (if (sk > 1) "miring kuat ke kanan" else "miring sedang ke kanan") else (if (sk < -1) "miring kuat ke kiri" else "miring sedang ke kiri")
-  c(sprintf("Rata-rata **%s** dan median **%s**%s.", fmt(m), fmt(me), if (abs(m - me) / s > .1) paste0("; rata-rata ", if (m > me) "lebih besar" else "lebih kecil", " dari median sehingga sebaran condong ke ", if (m > me) "kanan" else "kiri") else "; keduanya berdekatan (sebaran seimbang)"),
-    sprintf("Sebaran data: simpangan baku **%s**, rentang **%s** sampai **%s**, koefisien variasi **%s%%**.", fmt(s), fmt(min(x)), fmt(max(x)), fmt(100 * s / m)),
-    sprintf("Bentuk distribusi **%s** (skewness %s); kurtosis %s menunjukkan puncak yang **%s**.", shape, fmt(sk, 2), fmt(ku, 2), if (ku < -1) "datar (mendekati sebaran seragam)" else if (ku > 1) "runcing" else "mendekati normal"),
-    if (out == 0) "Tidak ditemukan pencilan menurut aturan 1.5 x IQR." else sprintf("Terdapat **%d pencilan** menurut aturan 1.5 x IQR (%s%% data). Pencilan dipertahankan karena merupakan transaksi yang valid.", out, fmt(100 * out / length(x), 1)))
-}
+def plot_uni(d, v, type):
+
+    # Mengambil warna dari palet pink
+    colors = pal_cat(20)
+
+    # ==========================================
+    # 1. DERET WAKTU HARIAN
+    # ==========================================
+    if v == "Date":
+
+        dd = d.groupby("Date").size().reset_index(name="n")
+        dd = dd.sort_values("Date")
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        ax.plot(
+            dd["Date"], dd["n"],
+            color=pk["l"],
+            linewidth=1.5,
+            label="Jumlah transaksi"
+        )
+
+        ax.scatter(
+            dd["Date"], dd["n"],
+            color=pk["m"],
+            s=15
+        )
+
+        # Garis tren LOESS
+        if len(dd) >= 3:
+            x = np.arange(len(dd))
+            trend = lowess(dd["n"], x, frac=0.3)
+
+            ax.plot(
+                dd["Date"],
+                trend[:, 1],
+                color=pk["d"],
+                linewidth=2.5,
+                label="Tren (LOESS)"
+            )
+
+        ax.set_title(
+            "Jumlah transaksi per hari",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.set_xlabel("Tanggal")
+        ax.set_ylabel("Jumlah transaksi")
+        ax.legend()
+
+        theme_pink(ax, pk)
+        fig.autofmt_xdate()
+        fig.tight_layout()
+
+        return fig
+
+    # ==========================================
+    # 2. DATA KATEGORIK
+    # ==========================================
+    if v in cat_all:
+
+        tab = (
+            d[v]
+            .value_counts()
+            .sort_index()
+            .reset_index()
+        )
+
+        tab.columns = ["Kategori", "n"]
+
+        tab["pct"] = (
+            100 * tab["n"] / tab["n"].sum()
+        )
+
+        # --------------------------------------
+        # DIAGRAM LINGKARAN
+        # --------------------------------------
+        if type == "Diagram lingkaran":
+
+            fig, ax = plt.subplots(figsize=(7, 6))
+
+            ax.pie(
+                tab["n"],
+                labels=None,
+                colors=pal_cat(len(tab)),
+                startangle=90,
+                autopct="%1.1f%%",
+                pctdistance=0.65,
+                textprops={
+                    "color": "white",
+                    "fontweight": "bold"
+                },
+                wedgeprops={
+                    "edgecolor": "white",
+                    "linewidth": 1
+                }
+            )
+
+            ax.legend(
+                tab["Kategori"],
+                title=v,
+                loc="center left",
+                bbox_to_anchor=(1, 0.5)
+            )
+
+            ax.set_title(
+                f"Proporsi {v}",
+                fontweight="bold",
+                color=pk["d"],
+                fontsize=14
+            )
+
+            fig.patch.set_facecolor("white")
+            fig.tight_layout()
+
+            return fig
+
+        # --------------------------------------
+        # DIAGRAM PARETO
+        # --------------------------------------
+        if type == "Pareto":
+
+            tab = tab.sort_values(
+                "n",
+                ascending=False
+            ).reset_index(drop=True)
+
+            tab["kum"] = (
+                tab["n"].cumsum()
+                / tab["n"].sum() * 100
+            )
+
+            fig, ax = plt.subplots(figsize=(10, 5))
+
+            x = np.arange(len(tab))
+            total = tab["n"].sum()
+
+            ax.bar(
+                x,
+                tab["n"],
+                color=pk["l"],
+                width=0.7
+            )
+
+            ax.set_ylabel("Frekuensi")
+            ax.set_xlabel(v)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels(
+                tab["Kategori"],
+                rotation=20,
+                ha="right"
+            )
+
+            # Sumbu kedua untuk persentase kumulatif
+            ax2 = ax.twinx()
+
+            ax2.plot(
+                x,
+                tab["kum"],
+                color=pk["d"],
+                marker="o",
+                linewidth=1.5
+            )
+
+            ax2.set_ylabel("Kumulatif (%)")
+            ax2.set_ylim(0, 110)
+
+            for i, value in enumerate(tab["kum"]):
+                ax2.annotate(
+                    f"{value:.1f}%",
+                    (i, value),
+                    textcoords="offset points",
+                    xytext=(0, 8),
+                    ha="center",
+                    color=pk["mauve"],
+                    fontsize=9
+                )
+
+            ax.set_title(
+                f"Pareto {v}",
+                fontweight="bold",
+                color=pk["d"]
+            )
+
+            theme_pink(ax, pk)
+            fig.tight_layout()
+
+            return fig
+
+        # --------------------------------------
+        # DIAGRAM BATANG
+        # --------------------------------------
+        fig, ax = plt.subplots(figsize=(9, 5))
+
+        bars = ax.bar(
+            tab["Kategori"].astype(str),
+            tab["n"],
+            color=pal_cat(len(tab)),
+            width=0.7
+        )
+
+        ax.bar_label(
+            bars,
+            padding=3,
+            color=pk["mauve"],
+            fontweight="bold"
+        )
+
+        ax.set_title(
+            f"Frekuensi {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.set_xlabel(v)
+        ax.set_ylabel("Frekuensi")
+
+        ax.tick_params(
+            axis="x",
+            labelrotation=20
+        )
+
+        for label in ax.get_xticklabels():
+            label.set_horizontalalignment("right")
+
+        theme_pink(ax, pk)
+        fig.tight_layout()
+
+        return fig
+
+    # ==========================================
+    # 3. DATA NUMERIK
+    # ==========================================
+
+    x = pd.to_numeric(
+        d[v],
+        errors="coerce"
+    ).dropna()
+
+    bw = v in ["Quantity", "Hour"]
+
+    # ------------------------------------------
+    # HISTOGRAM
+    # ------------------------------------------
+    if type in ["Histogram", "Histogram + Density"]:
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+
+        if bw:
+            bins = np.arange(
+                x.min() - 0.5,
+                x.max() + 1.5,
+                1
+            )
+        else:
+            bins = 25
+
+        density = type == "Histogram + Density"
+
+        ax.hist(
+            x,
+            bins=bins,
+            density=density,
+            color=pk["xl"],
+            edgecolor="white"
+        )
+
+        if density and len(x) > 1 and x.nunique() > 1:
+            kde = stats.gaussian_kde(x)
+
+            xx = np.linspace(
+                x.min(),
+                x.max(),
+                300
+            )
+
+            ax.plot(
+                xx,
+                kde(xx),
+                color=pk["d"],
+                linewidth=2
+            )
+
+        ax.set_title(
+            f"{'Histogram dan Density' if density else 'Distribusi'} {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.set_xlabel(v)
+        ax.set_ylabel(
+            "Densitas" if density else "Frekuensi"
+        )
+
+        theme_pink(ax, pk)
+        fig.tight_layout()
+
+        return fig
+
+    # ------------------------------------------
+    # DENSITY
+    # ------------------------------------------
+    if type == "Density":
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+
+        if len(x) > 1 and x.nunique() > 1:
+
+            kde = stats.gaussian_kde(x)
+
+            xx = np.linspace(
+                x.min(),
+                x.max(),
+                300
+            )
+
+            yy = kde(xx)
+
+            ax.fill_between(
+                xx,
+                yy,
+                color=pk["l"],
+                alpha=0.5
+            )
+
+            ax.plot(
+                xx,
+                yy,
+                color=pk["d"],
+                linewidth=1.5
+            )
+
+        ax.axvline(
+            x.mean(),
+            color=pk["mauve"],
+            linestyle="--",
+            label="Rata-rata"
+        )
+
+        ax.set_title(
+            f"Density {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.set_xlabel(v)
+        ax.set_ylabel("Densitas")
+
+        ax.legend()
+        theme_pink(ax, pk)
+
+        fig.tight_layout()
+
+        return fig
+
+    # ------------------------------------------
+    # BOXPLOT
+    # ------------------------------------------
+    if type == "Boxplot":
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+
+        ax.boxplot(
+            x,
+            vert=False,
+            patch_artist=True,
+            widths=0.45,
+            boxprops={
+                "facecolor": pk["xl"],
+                "edgecolor": pk["d"]
+            },
+            medianprops={
+                "color": pk["d"],
+                "linewidth": 2
+            },
+            whiskerprops={
+                "color": pk["d"]
+            },
+            capprops={
+                "color": pk["d"]
+            },
+            flierprops={
+                "markerfacecolor": pk["m"],
+                "markeredgecolor": pk["m"]
+            }
+        )
+
+        ax.scatter(
+            x.mean(),
+            1,
+            marker="D",
+            s=55,
+            facecolor="white",
+            edgecolor=pk["d"],
+            label="Rata-rata"
+        )
+
+        ax.set_yticks([])
+        ax.set_xlabel(v)
+
+        ax.set_title(
+            f"Boxplot {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.legend()
+        theme_pink(ax, pk)
+
+        fig.tight_layout()
+
+        return fig
+
+    # ------------------------------------------
+    # QQ-PLOT
+    # ------------------------------------------
+    if type == "QQ-plot":
+
+        fig, ax = plt.subplots(figsize=(7, 6))
+
+        stats.probplot(
+            x,
+            dist="norm",
+            plot=ax
+        )
+
+        ax.get_lines()[0].set_color(pk["m"])
+        ax.get_lines()[0].set_alpha(0.6)
+
+        ax.get_lines()[1].set_color(pk["d"])
+
+        ax.set_title(
+            f"QQ-plot {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        ax.set_xlabel("Kuantil teoretis")
+        ax.set_ylabel("Kuantil sampel")
+
+        theme_pink(ax, pk)
+        fig.tight_layout()
+
+        return fig
+
+    # ------------------------------------------
+    # STEM-AND-LEAF
+    # ------------------------------------------
+    if type == "Stem-and-leaf":
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+        stem_data = np.sort(x.to_numpy())
+
+        stems = np.floor(stem_data).astype(int)
+        leaves = np.round(
+            (stem_data - stems) * 10
+        ).astype(int)
+
+        lines = ["STEM-AND-LEAF", ""]
+
+        for stem in np.unique(stems):
+            leaf_values = leaves[stems == stem]
+
+            lines.append(
+                f"{stem:>8} | {' '.join(map(str, leaf_values))}"
+            )
+
+        ax.text(
+            0.05,
+            0.95,
+            "\n".join(lines),
+            transform=ax.transAxes,
+            verticalalignment="top",
+            family="monospace",
+            fontsize=10,
+            color=pk["d"]
+        )
+
+        ax.axis("off")
+
+        ax.set_title(
+            f"Stem-and-leaf {v}",
+            fontweight="bold",
+            color=pk["d"]
+        )
+
+        fig.patch.set_facecolor("white")
+        fig.tight_layout()
+
+        return fig
+
+    return None
+
+def uni_table(d, v):
+
+    # ==========================================
+    # 1. VARIABEL TANGGAL
+    # ==========================================
+    if v == "Date":
+
+        dates = pd.to_datetime(d["Date"]).dropna()
+
+        unique_dates = dates.nunique()
+
+        dd = d.groupby("Date").size()
+
+        return pd.DataFrame({
+            "Statistik": [
+                "Tanggal awal",
+                "Tanggal akhir",
+                "Jumlah hari",
+                "Jumlah hari dengan transaksi",
+                "Rata-rata transaksi per hari"
+            ],
+
+            "Nilai": [
+                str(dates.min().date()),
+                str(dates.max().date()),
+                str((dates.max() - dates.min()).days + 1),
+                str(unique_dates),
+                fmt(len(d) / unique_dates)
+            ]
+        })
+
+    # ==========================================
+    # 2. VARIABEL KATEGORIK
+    # ==========================================
+    if v in cat_all:
+
+        t = d[v].value_counts().sort_index()
+
+        out = pd.DataFrame({
+            "Kategori": t.index.astype(str),
+            "Frekuensi": t.values,
+            "Persentase (%)": [
+                fmt(100 * value / t.sum())
+                for value in t.values
+            ]
+        })
+
+        return out
+
+    # ==========================================
+    # 3. VARIABEL NUMERIK
+    # ==========================================
+
+    x = pd.to_numeric(
+        d[v],
+        errors="coerce"
+    ).dropna()
+
+    n = len(x)
+
+    q1 = x.quantile(0.25)
+    q3 = x.quantile(0.75)
+
+    iqr = q3 - q1
+
+    lo = q1 - 1.5 * iqr
+    hi = q3 + 1.5 * iqr
+
+    sd = x.std()
+    mean = x.mean()
+
+    variansi = x.var()
+
+    cv = (
+        100 * sd / mean
+        if mean != 0 else np.nan
+    )
+
+    jumlah_out = ((x < lo) | (x > hi)).sum()
+
+    statistik = [
+        "N",
+        "Rata-rata",
+        "Median",
+        "Simpangan baku",
+        "Variansi",
+        "Koef. variasi (%)",
+        "Minimum",
+        "Q1",
+        "Q3",
+        "Maksimum",
+        "IQR",
+        "Skewness",
+        "Kurtosis (excess)",
+        "Batas pencilan bawah",
+        "Batas pencilan atas",
+        "Jumlah pencilan"
+    ]
+
+    nilai = [
+        str(n),
+        fmt(mean),
+        fmt(x.median()),
+        fmt(sd),
+        fmt(variansi),
+        fmt(cv),
+        fmt(x.min()),
+        fmt(q1),
+        fmt(q3),
+        fmt(x.max()),
+        fmt(iqr),
+        fmt(skew_fun(x), 3),
+        fmt(kurt_fun(x), 3),
+        fmt(lo),
+        fmt(hi),
+        str(jumlah_out)
+    ]
+
+    return pd.DataFrame({
+        "Statistik": statistik,
+        "Nilai": nilai
+    })
+
+def interp_uni(d, v):
+
+    # ==========================================
+    # 1. INTERPRETASI VARIABEL TANGGAL
+    # ==========================================
+    if v == "Date":
+
+        dd = (
+            d.groupby("Date")
+            .size()
+            .reset_index(name="n")
+        )
+
+        top = dd.loc[dd["n"].idxmax()]
+
+        tanggal_awal = pd.to_datetime(d["Date"]).min()
+        tanggal_akhir = pd.to_datetime(d["Date"]).max()
+
+        return [
+            (
+                f"Data mencakup **{tanggal_awal:%Y-%m-%d}** "
+                f"sampai **{tanggal_akhir:%Y-%m-%d}** "
+                f"({len(dd)} hari bertransaksi)."
+            ),
+
+            (
+                f"Rata-rata **{fmt(dd['n'].mean())}** transaksi "
+                f"per hari; puncak pada "
+                f"**{top['Date']}** dengan "
+                f"**{top['n']}** transaksi."
+            ),
+
+            (
+                "Garis tren (loess) menunjukkan apakah volume "
+                "transaksi harian meningkat, menurun, atau "
+                "relatif stabil sepanjang periode."
+            )
+        ]
+
+    # ==========================================
+    # 2. INTERPRETASI VARIABEL KATEGORIK
+    # ==========================================
+    if v in cat_all:
+
+        t = d[v].value_counts().sort_values(
+            ascending=False
+        )
+
+        p = 100 * t / t.sum()
+
+        sp = p.max() - p.min()
+
+        return [
+            (
+                f"Kategori terbanyak: **{t.index[0]}** "
+                f"({t.iloc[0]} transaksi; "
+                f"{fmt(p.iloc[0], 1)}%). "
+                f"Tersedikit: **{t.index[-1]}** "
+                f"({t.iloc[-1]}; "
+                f"{fmt(p.iloc[-1], 1)}%)."
+            ),
+
+            (
+                f"Selisih proporsi tertinggi dan terendah "
+                f"**{fmt(sp, 1)}** poin persentase, "
+                f"sehingga sebaran kategori "
+                f"**{'relatif seimbang' if sp < 5 else 'tidak seimbang'}**."
+            ),
+
+            (
+                "Pareto menunjukkan apakah sedikit kategori "
+                "mendominasi (garis kumulatif cepat mencapai 80%)."
+            )
+        ]
+
+    # ==========================================
+    # 3. INTERPRETASI VARIABEL NUMERIK
+    # ==========================================
+
+    x = pd.to_numeric(
+        d[v],
+        errors="coerce"
+    ).dropna()
+
+    m = x.mean()
+    me = x.median()
+    s = x.std()
+
+    sk = skew_fun(x)
+    ku = kurt_fun(x)
+
+    q1 = x.quantile(0.25)
+    q3 = x.quantile(0.75)
+
+    iqr = q3 - q1
+
+    out = (
+        (x < q1 - 1.5 * iqr) |
+        (x > q3 + 1.5 * iqr)
+    ).sum()
+
+    # Bentuk distribusi
+    if pd.isna(sk):
+        shape = "tidak dapat ditentukan"
+    elif abs(sk) < 0.5:
+        shape = "hampir simetris"
+    elif sk > 0:
+        shape = (
+            "miring kuat ke kanan"
+            if sk > 1
+            else "miring sedang ke kanan"
+        )
+    else:
+        shape = (
+            "miring kuat ke kiri"
+            if sk < -1
+            else "miring sedang ke kiri"
+        )
+
+    # Perbandingan rata-rata dan median
+    if s == 0 or pd.isna(s):
+        perbandingan = "; rata-rata dan median sama"
+    elif abs(m - me) / s > 0.1:
+        arah = "kanan" if m > me else "kiri"
+
+        perbandingan = (
+            f"; rata-rata {'lebih besar' if m > me else 'lebih kecil'} "
+            f"dari median sehingga sebaran condong ke {arah}"
+        )
+    else:
+        perbandingan = (
+            "; keduanya berdekatan (sebaran seimbang)"
+        )
+
+    # Interpretasi kurtosis
+    if pd.isna(ku):
+        kurt_desc = "tidak dapat ditentukan"
+    elif ku < -1:
+        kurt_desc = "datar (mendekati sebaran seragam)"
+    elif ku > 1:
+        kurt_desc = "runcing"
+    else:
+        kurt_desc = "mendekati normal"
+
+    # Hasil interpretasi
+    hasil = [
+        (
+            f"Rata-rata **{fmt(m)}** dan median **{fmt(me)}**"
+            f"{perbandingan}."
+        ),
+
+        (
+            f"Sebaran data: simpangan baku **{fmt(s)}**, "
+            f"rentang **{fmt(x.min())}** sampai "
+            f"**{fmt(x.max())}**, koefisien variasi "
+            f"**{fmt(100 * s / m if m != 0 else np.nan)}%**."
+        ),
+
+        (
+            f"Bentuk distribusi **{shape}** "
+            f"(skewness {fmt(sk, 2)}); "
+            f"kurtosis {fmt(ku, 2)} menunjukkan "
+            f"puncak yang **{kurt_desc}**."
+        )
+    ]
+
+    if out == 0:
+        hasil.append(
+            "Tidak ditemukan pencilan menurut aturan 1.5 x IQR."
+        )
+    else:
+        hasil.append(
+            f"Terdapat **{out} pencilan** menurut aturan "
+            f"1.5 x IQR ({fmt(100 * out / len(x), 1)}% data). "
+            "Pencilan dipertahankan karena merupakan transaksi "
+            "yang valid."
+        )
+
+    return hasil
 
 # =============================================================================
 # 3. BIVARIAT
