@@ -6430,8 +6430,8 @@ with st.sidebar:
         format="DD-MM-YYYY",
         key="filter_date_range"
     )
-else:
-    f_date = None
+      else:
+        f_date = None
 
 
 st.session_state["reset_filter"] = False
