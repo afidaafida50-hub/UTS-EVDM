@@ -156,21 +156,61 @@ def pal_cat(n):
     ]
 
     return [colors[i % len(colors)] for i in range(n)]
-theme_pink <- function(base = 12) {
-  theme_minimal(base_size = base) +
-    theme(plot.title = element_text(face = "bold", colour = pk$d, size = base + 2),
-          plot.subtitle = element_text(colour = pk$mauve),
-          axis.title = element_text(face = "bold", colour = pk$mauve),
-          axis.text = element_text(colour = pk$txt),
-          legend.title = element_text(face = "bold", colour = pk$mauve),
-          strip.text = element_text(face = "bold", colour = pk$d),
-          panel.grid.minor = element_blank(),
-          panel.grid.major = element_line(colour = pk$grid),
-          plot.background = element_rect(fill = "white", colour = NA),
-          panel.background = element_rect(fill = "white", colour = NA))
-}
-rot <- theme(axis.text.x = element_text(angle = 20, hjust = 1), plot.margin = margin(8, 12, 8, 34))
+def theme_pink(ax, pk, base=12):
+    # Background putih
+    ax.set_facecolor("white")
+    ax.figure.set_facecolor("white")
 
+    # Judul grafik
+    ax.title.set_fontweight("bold")
+    ax.title.set_color(pk["d"])
+    ax.title.set_fontsize(base + 2)
+
+    # Judul sumbu
+    ax.xaxis.label.set_fontweight("bold")
+    ax.xaxis.label.set_color(pk["mauve"])
+
+    ax.yaxis.label.set_fontweight("bold")
+    ax.yaxis.label.set_color(pk["mauve"])
+
+    # Teks sumbu
+    ax.tick_params(axis="both", colors=pk["txt"])
+
+    # Grid
+    ax.grid(
+        True,
+        which="major",
+        color=pk["grid"],
+        linewidth=0.7
+    )
+
+    ax.grid(False, which="minor")
+    ax.minorticks_off()
+
+    # Legend
+    legend = ax.get_legend()
+
+    if legend is not None:
+        legend.get_title().set_fontweight("bold")
+        legend.get_title().set_color(pk["mauve"])
+
+    return ax
+def rot(ax):
+    # Memiringkan label sumbu X
+    ax.tick_params(axis="x", labelrotation=20)
+
+    for label in ax.get_xticklabels():
+        label.set_horizontalalignment("right")
+
+    # Mengatur margin grafik
+    ax.figure.subplots_adjust(
+        left=0.15,
+        right=0.98,
+        bottom=0.22,
+        top=0.90
+    )
+
+    return ax
 # ---- Fungsi bantu ------------------------------------------------------------
 fmt   <- function(x, k = 2) formatC(x, format = "f", digits = k, big.mark = ",")
 fmt_p <- function(p) ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p))
