@@ -5901,6 +5901,7 @@ with tabs[3]:
             mv_mcol = st.selectbox(
                 "Warna titik",
                 [NONE] + cat_base
+              key="mv_mcol_selectbox"
             )
 
         if "mv_pairs" in globals():
