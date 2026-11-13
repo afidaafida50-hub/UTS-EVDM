@@ -5283,14 +5283,14 @@ uploaded_file = st.sidebar.file_uploader(
 # Membaca file unggahan
 if uploaded_file is not None:
     try:
-        if uploaded_file.name.lower().endswith(".csv"):
-            raw_data = pd.read_csv(uploaded_file)
+        d0 = read_sales(uploaded_file)
+
+        if d0 is None:
+            st.sidebar.error(
+                "Format atau struktur kolom data tidak sesuai."
+            )
         else:
-            raw_data = pd.read_excel(uploaded_file)
-
-        d0 = prepare_sales(raw_data)
-
-        st.sidebar.success("Data berhasil dimuat.")
+            st.sidebar.success("Data berhasil dimuat.")
 
     except Exception as e:
         st.sidebar.error(f"Gagal membaca data: {e}")
