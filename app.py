@@ -5961,7 +5961,8 @@ with tabs[3]:
         mv_qvars = st.multiselect(
             "Variabel numerik (minimal 2)",
             num_all,
-            default=num_all
+            default=num_all,
+          key="mv_qvars_multiselect"
         )
 
         if "mv_qq" in globals():
