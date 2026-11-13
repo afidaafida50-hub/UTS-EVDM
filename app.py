@@ -9,9 +9,9 @@ DATA_FILE = "Data_Penjualan.xlsx"
 NAMA      = "Afida Mar'atus Solihah"
 NIM       = "231064005"
 APP_TITLE = "Dashboard Analisis Data Penjualan"
-SUMBER_DATA <- "Dataset sekunder data transaksi supermarket (Data_Penjualan.xlsx). Isi dengan tautan/sumber asli yang dapat dipertanggungjawabkan (mis. Kaggle: Supermarket Sales)."
-LATAR_BELAKANG <- "Supermarket perlu memahami faktor yang berkaitan dengan besarnya nilai transaksi agar strategi promosi, penataan produk, dan pelayanan dapat dirancang berdasarkan data. Nilai transaksi dapat dipengaruhi oleh jumlah barang yang dibeli, karakteristik pelanggan, lini produk, cabang, metode pembayaran, dan waktu transaksi. Analisis eksplorasi dan regresi linear berganda digunakan untuk mengidentifikasi faktor-faktor tersebut."
-TUJUAN <- c(
+SUMBER_DATA = "Dataset sekunder data transaksi supermarket (Data_Penjualan.xlsx). Isi dengan tautan/sumber asli yang dapat dipertanggungjawabkan (mis. Kaggle: Supermarket Sales)."
+LATAR_BELAKANG = "Supermarket perlu memahami faktor yang berkaitan dengan besarnya nilai transaksi agar strategi promosi, penataan produk, dan pelayanan dapat dirancang berdasarkan data. Nilai transaksi dapat dipengaruhi oleh jumlah barang yang dibeli, karakteristik pelanggan, lini produk, cabang, metode pembayaran, dan waktu transaksi. Analisis eksplorasi dan regresi linear berganda digunakan untuk mengidentifikasi faktor-faktor tersebut."
+TUJUAN = c(
   "Menggambarkan karakteristik setiap variabel pada data transaksi (univariat).",
   "Mengidentifikasi hubungan dan perbedaan kelompok antar dua variabel (bivariat).",
   "Mengeksplorasi pola yang melibatkan tiga variabel atau lebih (multivariat).",
@@ -20,15 +20,15 @@ TUJUAN <- c(
 )
 
 # ---- Konstanta variabel ------------------------------------------------------
-cat_base <- c("Branch", "Customer type", "Gender", "Product line", "Payment")
-cat_all  <- c(cat_base, "Bulan", "Hari")
-num_all  <- c("Quantity", "Total", "Rating", "Hour")
-NONE <- "(tidak ada)"
-bulan_lv <- c("Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
+cat_base = c("Branch", "Customer type", "Gender", "Product line", "Payment")
+cat_all  = c(cat_base, "Bulan", "Hari")
+num_all  = c("Quantity", "Total", "Rating", "Hour")
+NONE = "(tidak ada)"
+bulan_lv = c("Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
               "September","Oktober","November","Desember")
-hari_lv  <- c("Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu")
+hari_lv  = c("Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu")
 
-kamus <- data.frame(
+kamus = data.frame(
   Variabel = c("Branch","Customer type","Gender","Product line","Quantity","Total",
                "Date","Time","Payment","Rating","Hour (turunan)","Bulan (turunan)","Hari (turunan)"),
   Tipe = c("Kategorik","Kategorik","Kategorik","Kategorik","Numerik (diskret)","Numerik (kontinu)",
