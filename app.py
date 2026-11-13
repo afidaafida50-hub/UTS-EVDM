@@ -152,8 +152,19 @@ def read_sales(path):
     ]
 
 # ---- Palet & tema grafik (pink formal) ---------------------------------------
-pk <- list(d = "#880E4F", m = "#C2185B", s = "#AD1457", l = "#F48FB1", xl = "#F8BBD0",
-           bg = "#FFF5F8", txt = "#3B2A33", grid = "#EFDDE4", mauve = "#6D4C5E", slate = "#4F6D8F")
+pk = {
+    "d": "#880E4F",
+    "m": "#C2185B",
+    "s": "#AD1457",
+    "l": "#F48FB1",
+    "xl": "#F8BBD0",
+    "bg": "#FFF5F8",
+    "txt": "#3B2A33",
+    "grid": "#EFDDE4",
+    "mauve": "#6D4C5E",
+    "slate": "#4F6D8F"
+}
+
 def pal_cat(n):
     colors = [
         "#AD1457",
@@ -164,6 +175,7 @@ def pal_cat(n):
         "#B39DAB",
         "#880E4F"
     ]
+    return [colors[i % len(colors)] for i in range(n)]
 
     return [colors[i % len(colors)] for i in range(n)]
 def theme_pink(ax, pk, base=12):
