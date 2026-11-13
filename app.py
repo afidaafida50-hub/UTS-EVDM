@@ -1,7 +1,8 @@
-library(shiny)
-library(ggplot2)
-library(dplyr)
-library(readxl)
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 
 # ---- KONFIGURASI: EDIT BAGIAN INI -------------------------------------------
 DATA_FILE   <- "Data_Penjualan.xlsx"
