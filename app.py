@@ -1264,135 +1264,1080 @@ def plot_corr_circle(d, vars=None):
 
     return fig
 
-plot_bi <- function(d, x, y, type) {
-  xc <- x %in% cat_all; yc <- y %in% cat_all
-  # ---------- numerik x numerik ----------
-  if (!xc && !yc) {
-    if (type == "Correlation plot") return(plot_corr_circle(d, num_all))
-    if (type == "Scatter plot + kurva linear, kuadratik, nonparametrik") {
-      cols <- c("Linear" = pk$d, "Kuadratik" = pk$slate, "Nonparametrik (LOESS)" = "#2E7D32")
-      return(ggplot(d, aes(.data[[x]], .data[[y]])) + geom_point(colour = pk$l, alpha = .5, size = 1.8) +
-               geom_smooth(aes(colour = "Linear"), method = "lm", formula = y ~ x, se = FALSE, linewidth = 1.1) +
-               geom_smooth(aes(colour = "Kuadratik"), method = "lm", formula = y ~ poly(x, 2), se = FALSE, linewidth = 1.1) +
-               geom_smooth(aes(colour = "Nonparametrik (LOESS)"), method = "loess", formula = y ~ x, se = FALSE, linewidth = 1.1) +
-               scale_colour_manual(values = cols, name = "Kurva") +
-               labs(title = paste(y, "terhadap", x), subtitle = "Perbandingan kurva linear, kuadratik, dan nonparametrik (LOESS)", x = x, y = y) + theme_pink())
-    }
-    if (type == "Line plot rata-rata Y per X") {
-      xv <- d[[x]]; yv <- d[[y]]
-      grp <- if (length(unique(xv)) <= 12) xv else cut(xv, breaks = 10)
-      agg <- data.frame(gx = as.numeric(tapply(xv, grp, mean)), my = as.numeric(tapply(yv, grp, mean)), se = as.numeric(tapply(yv, grp, function(z) sd(z) / sqrt(length(z)))))
-      return(ggplot(agg, aes(gx, my)) + geom_ribbon(aes(ymin = my - se, ymax = my + se), fill = pk$xl, alpha = .8) + geom_line(colour = pk$d, linewidth = 1) + geom_point(colour = pk$m, size = 2.5) +
-               labs(title = paste("Rata-rata", y, "menurut", x), subtitle = "Pita = rata-rata +/- 1 standard error", x = x, y = paste("Rata-rata", y)) + theme_pink())
-    }
-    if (type == "Heatmap kepadatan 2D") return(ggplot(d, aes(.data[[x]], .data[[y]])) + geom_bin2d(bins = 20) + scale_fill_gradient(low = pk$bg, high = pk$d, name = "Jumlah") + labs(title = paste("Kepadatan", x, "dan", y), x = x, y = y) + theme_pink())
-    return(ggplot(d, aes(.data[[x]], .data[[y]])) + geom_point(colour = pk$m, alpha = .5, size = 1.8) + geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = 1) +
-             labs(title = paste(y, "terhadap", x), subtitle = "Scatterplot dengan garis regresi linear sederhana", x = x, y = y) + theme_pink())
-  }
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from scipy.stats import gaussian_kde
+from statsmodels.nonparametric.smoothers_lowess import lowess
+import statsmodels.api as sm
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+
+def plot_bi(d, x, y, type):
+
+    # Menentukan tipe variabel
+    xc = x in cat_all
+    yc = y in cat_all
+
+    # ---------- NUMERIK X NUMERIK ----------
+    if not xc and not yc:
+
+        # 1. Correlation plot
+        if type == "Correlation plot":
+            return plot_corr_circle(d, num_all)
+
+        # 2. Scatter plot + kurva linear, kuadratik, nonparametrik
+        if type == "Scatter plot + kurva linear, kuadratik, nonparametrik":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            xv = d[x].to_numpy()
+            yv = d[y].to_numpy()
+
+            # Scatter plot
+            ax.scatter(
+                xv, yv,
+                color=pk["l"],
+                alpha=0.5,
+                s=30,
+                label="Data"
+            )
+
+            # Mengurutkan X agar garis kurva tidak berantakan
+            order = np.argsort(xv)
+            xs = xv[order]
+
+            # Kurva linear
+            linear = np.polyfit(xv, yv, 1)
+            ax.plot(
+                xs,
+                np.polyval(linear, xs),
+                color=pk["d"],
+                linewidth=2,
+                label="Linear"
+            )
+
+            # Kurva kuadratik
+            quadratic = np.polyfit(xv, yv, 2)
+            ax.plot(
+                xs,
+                np.polyval(quadratic, xs),
+                color=pk["slate"],
+                linewidth=2,
+                label="Kuadratik"
+            )
+
+            # Kurva nonparametrik (LOESS)
+            loess = lowess(yv, xv, frac=0.6, return_sorted=True)
+
+            ax.plot(
+                loess[:, 0],
+                loess[:, 1],
+                color="#2E7D32",
+                linewidth=2,
+                label="Nonparametrik (LOESS)"
+            )
+
+            ax.set_title(f"{y} terhadap {x}")
+            ax.set_xlabel(x)
+            ax.set_ylabel(y)
+
+            ax.legend(title="Kurva")
+            ax.grid(alpha=0.2)
+
+            return fig
+
+        # 3. Line plot rata-rata Y per X
+        if type == "Line plot rata-rata Y per X":
+
+            xv = d[x]
+            yv = d[y]
+
+            # Pengelompokan data
+            if xv.nunique() <= 12:
+                grp = xv
+            else:
+                grp = pd.cut(xv, bins=10)
+
+            temp = pd.DataFrame({
+                "gx": xv,
+                "yv": yv,
+                "grp": grp
+            })
+
+            agg = temp.groupby(
+                "grp",
+                observed=True
+            ).agg(
+                gx=("gx", "mean"),
+                my=("yv", "mean"),
+                sd=("yv", "std"),
+                n=("yv", "count")
+            ).reset_index(drop=True)
+
+            # Standard error
+            agg["se"] = agg["sd"] / np.sqrt(agg["n"])
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            ax.fill_between(
+                agg["gx"],
+                agg["my"] - agg["se"],
+                agg["my"] + agg["se"],
+                color=pk["xl"],
+                alpha=0.8
+            )
+
+            ax.plot(
+                agg["gx"],
+                agg["my"],
+                color=pk["d"],
+                linewidth=2
+            )
+
+            ax.scatter(
+                agg["gx"],
+                agg["my"],
+                color=pk["m"],
+                s=50
+            )
+
+            ax.set_title(f"Rata-rata {y} menurut {x}")
+            ax.set_xlabel(x)
+            ax.set_ylabel(f"Rata-rata {y}")
+
+            ax.grid(alpha=0.2)
+
+            return fig
+
+        # 4. Heatmap kepadatan 2D
+        if type == "Heatmap kepadatan 2D":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            sns.histplot(
+                data=d,
+                x=x,
+                y=y,
+                bins=20,
+                cmap="pink",
+                cbar=True,
+                ax=ax
+            )
+
+            ax.set_title(f"Kepadatan {x} dan {y}")
+            ax.set_xlabel(x)
+            ax.set_ylabel(y)
+
+            return fig
+
+        # 5. Scatter plot + garis regresi linear
+        fig, ax = plt.subplots(figsize=(9, 6))
+
+        sns.regplot(
+            data=d,
+            x=x,
+            y=y,
+            scatter_kws={
+                "color": pk["m"],
+                "alpha": 0.5,
+                "s": 30
+            },
+            line_kws={
+                "color": pk["d"],
+                "linewidth": 2
+            },
+            ci=None,
+            ax=ax
+        )
+
+        ax.set_title(f"{y} terhadap {x}")
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+
+        ax.grid(alpha=0.2)
+
+        return fig
+
   # ---------- kategorik x numerik ----------
-  if (xc != yc) {
-    cv <- if (xc) x else y; nv <- if (xc) y else x; k <- nlevels(d[[cv]]); cols <- pal_cat(k)
-    d2 <- data.frame(g = d[[cv]], v = d[[nv]])
-    agg <- d2 %>% group_by(g) %>% summarise(m = mean(v), se = sd(v) / sqrt(n()), md = median(v), s = sd(v), mn = min(v), mx = max(v), .groups = "drop")
-    if (type == "Grouped violin plot")
-      return(ggplot(d2, aes(g, v, fill = g)) + geom_violin(show.legend = FALSE, alpha = .75, colour = pk$mauve) + geom_boxplot(width = .12, fill = "white", outlier.shape = NA) +
-               scale_fill_manual(values = cols) + labs(title = paste("Grouped violin plot:", nv, "menurut", cv), x = cv, y = nv) + theme_pink() + rot)
-    if (type == "Grouped kernel density plot")
-      return(ggplot(d2, aes(v, fill = g, colour = g)) + geom_density(alpha = .35) + scale_fill_manual(values = cols) + scale_colour_manual(values = cols) +
-               labs(title = paste("Grouped kernel density plot:", nv, "per", cv), x = nv, y = "Densitas", fill = cv, colour = cv) + theme_pink())
-    if (type == "Grouped ridgeline plot") {
-      rng <- range(d2$v); lv <- levels(d2$g)
-      rd <- do.call(rbind, lapply(seq_along(lv), function(i) { dd <- density(d2$v[d2$g == lv[i]], from = rng[1], to = rng[2], n = 256); data.frame(g = lv[i], i = i, x = dd$x, y = dd$y) }))
-      rd$h <- rd$y / max(rd$y) * 1.6; rd$g <- factor(rd$g, levels = lv); rd <- rd[order(-rd$i), ]
-      return(ggplot(rd, aes(x, group = g)) + geom_ribbon(aes(ymin = i, ymax = i + h, fill = g), colour = pk$mauve, alpha = .8, show.legend = FALSE) +
-               scale_fill_manual(values = cols) + scale_y_continuous(breaks = seq_along(lv), labels = lv) +
-               labs(title = paste("Grouped ridgeline plot:", nv, "per", cv), x = nv, y = cv) + theme_pink())
-    }
-    if (type == "Grouped strip plot")
-      return(ggplot(d2, aes(g, v, colour = g)) + geom_jitter(width = .22, height = if (nv %in% c("Quantity", "Hour")) .15 else 0, alpha = .45, size = 1.6, show.legend = FALSE) +
-               stat_summary(fun = mean, geom = "point", shape = 23, size = 4, fill = "white", colour = pk$d) + scale_colour_manual(values = cols) +
-               labs(title = paste("Grouped strip plot:", nv, "menurut", cv), subtitle = "Titik = observasi; berlian = rata-rata", x = cv, y = nv) + theme_pink() + rot)
-    if (type == "Grouped mean/SEM plot")
-      return(ggplot(agg, aes(g, m, colour = g)) + geom_errorbar(aes(ymin = m - se, ymax = m + se), width = .15, linewidth = .9, show.legend = FALSE) + geom_point(size = 3.8, show.legend = FALSE) +
-               scale_colour_manual(values = cols) + labs(title = paste("Grouped mean/SEM plot:", nv, "menurut", cv), subtitle = "Titik = rata-rata; garis = +/- 1 standard error (SEM)", x = cv, y = paste("Rata-rata", nv)) + theme_pink() + rot)
-    if (type == "Bar chart statistik ringkasan") {
-      st <- c("Rata-rata", "Median", "Simpangan baku", "Minimum", "Maksimum")
-      long <- data.frame(g = rep(agg$g, 5), stat = factor(rep(st, each = nrow(agg)), levels = st), val = c(agg$m, agg$md, agg$s, agg$mn, agg$mx))
-      return(ggplot(long, aes(g, val, fill = g)) + geom_col(show.legend = FALSE, width = .7) + geom_text(aes(label = round(val, 1)), vjust = -.3, size = 3.2, colour = pk$txt) +
-               facet_wrap(vars(stat), scales = "free_y") + scale_fill_manual(values = cols) + scale_y_continuous(expand = expansion(mult = c(0, .15))) +
-               labs(title = paste("Bar chart statistik ringkasan", nv, "menurut", cv), x = cv, y = nv) + theme_pink(11) + rot)
-    }
-    if (type == "Bar chart rata-rata (+/- SE)")
-      return(ggplot(agg, aes(g, m, fill = g)) + geom_col(show.legend = FALSE, width = .7) + geom_errorbar(aes(ymin = m - se, ymax = m + se), width = .2, colour = pk$txt) +
-               geom_text(aes(label = round(m, 2)), vjust = 1.6, colour = "white", fontface = "bold") + scale_fill_manual(values = cols) +
-               labs(title = paste("Rata-rata", nv, "menurut", cv), subtitle = "Garis = +/- 1 standard error", x = cv, y = paste("Rata-rata", nv)) + theme_pink() + rot)
-    if (type == "Cleveland dot chart") {
-      a2 <- agg[order(agg$m), ]; lv <- as.character(a2$g)
-      cl <- data.frame(g = factor(rep(lv, 2), levels = lv), stat = rep(c("Rata-rata", "Median"), each = nrow(a2)), val = c(a2$m, a2$md))
-      pad <- 0.15 * max(diff(range(cl$val)), abs(mean(cl$val)) * .05); lo <- min(cl$val) - pad; hi <- max(cl$val) + pad
-      sg <- data.frame(g = factor(lv, levels = lv), lo = lo, hi = hi)
-      return(ggplot(cl, aes(val, g)) + geom_segment(data = sg, aes(x = lo, xend = hi, y = g, yend = g), inherit.aes = FALSE, colour = pk$grid, linetype = "dotted") +
-               geom_point(aes(fill = stat), shape = 21, size = 4, colour = pk$d) + scale_fill_manual(values = c("Rata-rata" = pk$m, "Median" = "white"), name = NULL) +
-               scale_x_continuous(limits = c(lo, hi)) + labs(title = paste("Cleveland dot chart:", nv, "menurut", cv), subtitle = "Kategori diurutkan menurut rata-rata", x = nv, y = cv) + theme_pink() + theme(legend.position = "bottom"))
-    }
-    return(ggplot(d2, aes(g, v, fill = g)) + geom_boxplot(show.legend = FALSE, alpha = .85, colour = pk$mauve, outlier.colour = pk$m) +
-             stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "white") + scale_fill_manual(values = cols) +
-             labs(title = paste("Grouped boxplot:", nv, "menurut", cv), subtitle = "Berlian = rata-rata", x = cv, y = nv) + theme_pink() + rot)
-  }
+  
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from scipy.stats import gaussian_kde
+
+
+def plot_bi(d, x, y, type):
+
+    # Menentukan tipe variabel
+    xc = x in cat_all
+    yc = y in cat_all
+
+    # ---------- KATEGORIK X NUMERIK ----------
+    if xc != yc:
+
+        # Menentukan variabel kategorik dan numerik
+        cv = x if xc else y
+        nv = y if xc else x
+
+        # Mengambil data
+        d2 = pd.DataFrame({
+            "g": d[cv],
+            "v": pd.to_numeric(d[nv], errors="coerce")
+        }).dropna()
+
+        # Mempertahankan urutan kategori
+        if isinstance(d[cv].dtype, pd.CategoricalDtype):
+            levels = list(d[cv].cat.categories)
+        else:
+            levels = list(d2["g"].drop_duplicates())
+
+        d2["g"] = pd.Categorical(
+            d2["g"],
+            categories=levels,
+            ordered=True
+        )
+
+        # Palet warna
+        cols = pal_cat(len(levels))
+        color_map = dict(zip(levels, cols))
+
+        # Statistik ringkasan
+        agg = d2.groupby(
+            "g",
+            observed=False
+        )["v"].agg(
+            m="mean",
+            md="median",
+            s="std",
+            mn="min",
+            mx="max",
+            n="count"
+        ).reset_index()
+
+        agg["se"] = agg["s"] / np.sqrt(agg["n"])
+
+        # Fungsi pengaturan grafik
+        def finish(ax, title, subtitle=None):
+            ax.set_title(title)
+            if subtitle:
+                ax.set_xlabel(cv)
+                ax.set_ylabel(nv)
+            ax.grid(alpha=0.2)
+
+        # 1. Grouped violin plot
+        if type == "Grouped violin plot":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            sns.violinplot(
+                data=d2,
+                x="g",
+                y="v",
+                hue="g",
+                palette=color_map,
+                inner=None,
+                alpha=0.75,
+                legend=False,
+                ax=ax
+            )
+
+            sns.boxplot(
+                data=d2,
+                x="g",
+                y="v",
+                width=0.12,
+                color="white",
+                showfliers=False,
+                ax=ax
+            )
+
+            ax.set_title(
+                f"Grouped violin plot: {nv} menurut {cv}"
+            )
+            ax.set_xlabel(cv)
+            ax.set_ylabel(nv)
+            ax.grid(axis="y", alpha=0.2)
+            plt.xticks(rotation=35, ha="right")
+
+            return fig
+
+        # 2. Grouped kernel density plot
+        if type == "Grouped kernel density plot":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            for g in levels:
+                values = d2.loc[d2["g"] == g, "v"].dropna()
+
+                if len(values) < 2 or values.nunique() < 2:
+                    continue
+
+                sns.kdeplot(
+                    x=values,
+                    fill=True,
+                    alpha=0.25,
+                    color=color_map[g],
+                    linewidth=1.5,
+                    label=str(g),
+                    ax=ax
+                )
+
+            ax.set_title(
+                f"Grouped kernel density plot: {nv} per {cv}"
+            )
+            ax.set_xlabel(nv)
+            ax.set_ylabel("Densitas")
+            ax.legend(title=cv)
+            ax.grid(alpha=0.2)
+
+            return fig
+
+        # 3. Grouped ridgeline plot
+        if type == "Grouped ridgeline plot":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            valid = d2["v"].dropna()
+            xmin, xmax = valid.min(), valid.max()
+
+            if xmin == xmax:
+                xmin -= 0.5
+                xmax += 0.5
+
+            xs = np.linspace(xmin, xmax, 256)
+
+            # Menghitung densitas setiap kategori
+            densities = {}
+
+            for g in levels:
+                values = d2.loc[d2["g"] == g, "v"].dropna()
+
+                if len(values) >= 2 and values.nunique() > 1:
+                    kde = gaussian_kde(values)
+                    densities[g] = kde(xs)
+                else:
+                    densities[g] = np.zeros(len(xs))
+
+            max_density = max(
+                [z.max() for z in densities.values()],
+                default=0
+            )
+
+            # Membuat ridgeline
+            for i, g in enumerate(reversed(levels)):
+
+                density = densities[g]
+
+                if max_density > 0:
+                    height = density / max_density * 1.6
+                else:
+                    height = density
+
+                base = i + 1
+
+                ax.fill_between(
+                    xs,
+                    base,
+                    base + height,
+                    color=color_map[g],
+                    alpha=0.8,
+                    linewidth=1
+                )
+
+                ax.plot(
+                    xs,
+                    base + height,
+                    color=pk["mauve"],
+                    linewidth=0.8
+                )
+
+            ax.set_yticks(range(1, len(levels) + 1))
+            ax.set_yticklabels(list(reversed(levels)))
+
+            ax.set_title(
+                f"Grouped ridgeline plot: {nv} per {cv}"
+            )
+            ax.set_xlabel(nv)
+            ax.set_ylabel(cv)
+            ax.grid(axis="x", alpha=0.2)
+
+            return fig
+
+        # 4. Grouped strip plot
+        if type == "Grouped strip plot":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            sns.stripplot(
+                data=d2,
+                x="g",
+                y="v",
+                hue="g",
+                palette=color_map,
+                jitter=0.22,
+                alpha=0.45,
+                size=4,
+                legend=False,
+                ax=ax
+            )
+
+            # Menambahkan titik rata-rata berbentuk berlian
+            sns.pointplot(
+                data=d2,
+                x="g",
+                y="v",
+                color=pk["d"],
+                estimator="mean",
+                errorbar=None,
+                markers="D",
+                markersize=8,
+                linestyle="none",
+                ax=ax
+            )
+
+            ax.set_title(
+                f"Grouped strip plot: {nv} menurut {cv}"
+            )
+            ax.set_xlabel(cv)
+            ax.set_ylabel(nv)
+            ax.text(
+                0.5, 1.02,
+                "Titik = observasi; berlian = rata-rata",
+                transform=ax.transAxes,
+                ha="center",
+                fontsize=9
+            )
+
+            ax.grid(axis="y", alpha=0.2)
+            plt.xticks(rotation=35, ha="right")
+
+            return fig
+
+        # 5. Grouped mean/SEM plot
+        if type == "Grouped mean/SEM plot":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            positions = np.arange(len(agg))
+
+            for i, row in agg.iterrows():
+
+                ax.errorbar(
+                    i,
+                    row["m"],
+                    yerr=row["se"] if pd.notna(row["se"]) else 0,
+                    fmt="o",
+                    color=color_map[row["g"]],
+                    markersize=8,
+                    capsize=5,
+                    linewidth=1.5
+                )
+
+            ax.set_xticks(positions)
+            ax.set_xticklabels(
+                agg["g"].astype(str),
+                rotation=35,
+                ha="right"
+            )
+
+            ax.set_title(
+                f"Grouped mean/SEM plot: {nv} menurut {cv}"
+            )
+            ax.set_xlabel(cv)
+            ax.set_ylabel(f"Rata-rata {nv}")
+
+            ax.text(
+                0.5, 1.02,
+                "Titik = rata-rata; garis = +/- 1 standard error (SEM)",
+                transform=ax.transAxes,
+                ha="center",
+                fontsize=9
+            )
+
+            ax.grid(axis="y", alpha=0.2)
+
+            return fig
+
+        # 6. Bar chart statistik ringkasan
+        if type == "Bar chart statistik ringkasan":
+
+            stats = [
+                ("Rata-rata", "m"),
+                ("Median", "md"),
+                ("Simpangan baku", "s"),
+                ("Minimum", "mn"),
+                ("Maksimum", "mx")
+            ]
+
+            fig, axes = plt.subplots(
+                1, 5,
+                figsize=(17, 6)
+            )
+
+            for ax, (label, col) in zip(axes, stats):
+
+                values = agg[col]
+
+                ax.bar(
+                    agg["g"].astype(str),
+                    values,
+                    color=cols,
+                    width=0.7
+                )
+
+                for i, val in enumerate(values):
+                    if pd.notna(val):
+                        ax.text(
+                            i,
+                            val,
+                            f"{val:.1f}",
+                            ha="center",
+                            va="bottom",
+                            fontsize=8,
+                            color=pk["txt"]
+                        )
+
+                ax.set_title(label, fontsize=10)
+                ax.tick_params(axis="x", rotation=45)
+                ax.grid(axis="y", alpha=0.2)
+
+            fig.suptitle(
+                f"Bar chart statistik ringkasan {nv} menurut {cv}"
+            )
+            fig.tight_layout()
+
+            return fig
+
+        # 7. Bar chart rata-rata (+/- SE)
+        if type == "Bar chart rata-rata (+/- SE)":
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            positions = np.arange(len(agg))
+
+            ax.bar(
+                positions,
+                agg["m"],
+                color=cols,
+                width=0.7
+            )
+
+            ax.errorbar(
+                positions,
+                agg["m"],
+                yerr=agg["se"].fillna(0),
+                fmt="none",
+                color=pk["txt"],
+                capsize=5
+            )
+
+            for i, val in enumerate(agg["m"]):
+                if pd.notna(val):
+                    ax.text(
+                        i,
+                        val,
+                        f"{val:.2f}",
+                        ha="center",
+                        va="top",
+                        color="white",
+                        fontweight="bold"
+                    )
+
+            ax.set_xticks(positions)
+            ax.set_xticklabels(
+                agg["g"].astype(str),
+                rotation=35,
+                ha="right"
+            )
+
+            ax.set_title(
+                f"Rata-rata {nv} menurut {cv}"
+            )
+            ax.set_xlabel(cv)
+            ax.set_ylabel(f"Rata-rata {nv}")
+
+            ax.text(
+                0.5, 1.02,
+                "Garis = +/- 1 standard error",
+                transform=ax.transAxes,
+                ha="center",
+                fontsize=9
+            )
+
+            ax.grid(axis="y", alpha=0.2)
+
+            return fig
+
+        # 8. Cleveland dot chart
+        if type == "Cleveland dot chart":
+
+            a2 = agg.sort_values("m").reset_index(drop=True)
+
+            lv = a2["g"].astype(str).tolist()
+
+            cl = pd.DataFrame({
+                "g": lv * 2,
+                "stat": (
+                    ["Rata-rata"] * len(a2)
+                    + ["Median"] * len(a2)
+                ),
+                "val": list(a2["m"]) + list(a2["md"])
+            })
+
+            values = cl["val"].dropna()
+
+            pad = 0.15 * max(
+                values.max() - values.min(),
+                abs(values.mean()) * 0.05,
+                1e-9
+            )
+
+            lo = values.min() - pad
+            hi = values.max() + pad
+
+            fig, ax = plt.subplots(figsize=(9, 6))
+
+            for i, row in a2.iterrows():
+
+                ax.hlines(
+                    y=i,
+                    xmin=lo,
+                    xmax=hi,
+                    color=pk["grid"],
+                    linestyle="dotted",
+                    linewidth=1
+                )
+
+                ax.scatter(
+                    row["m"],
+                    i,
+                    s=90,
+                    color=pk["m"],
+                    edgecolor=pk["d"],
+                    label="Rata-rata" if i == 0 else None
+                )
+
+                ax.scatter(
+                    row["md"],
+                    i,
+                    s=90,
+                    color="white",
+                    edgecolor=pk["d"],
+                    label="Median" if i == 0 else None
+                )
+
+            ax.set_yticks(range(len(lv)))
+            ax.set_yticklabels(lv)
+            ax.set_xlim(lo, hi)
+
+            ax.set_title(
+                f"Cleveland dot chart: {nv} menurut {cv}"
+            )
+
+            ax.set_xlabel(nv)
+            ax.set_ylabel(cv)
+
+            ax.legend(
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.12),
+                ncol=2
+            )
+
+            ax.grid(axis="x", alpha=0.2)
+
+            return fig
+
+        # 9. Grouped boxplot (default)
+        fig, ax = plt.subplots(figsize=(9, 6))
+
+        sns.boxplot(
+            data=d2,
+            x="g",
+            y="v",
+            hue="g",
+            palette=color_map,
+            showfliers=True,
+            ax=ax
+        )
+
+        # Menambahkan rata-rata berbentuk berlian
+        means = agg["m"]
+
+        ax.scatter(
+            np.arange(len(agg)),
+            means,
+            marker="D",
+            s=55,
+            color="white",
+            edgecolor=pk["d"],
+            zorder=5,
+            label="Rata-rata"
+        )
+
+        ax.set_title(
+            f"Grouped boxplot: {nv} menurut {cv}"
+        )
+        ax.set_xlabel(cv)
+        ax.set_ylabel(nv)
+
+        ax.text(
+            0.5, 1.02,
+            "Berlian = rata-rata",
+            transform=ax.transAxes,
+            ha="center",
+            fontsize=9
+        )
+
+        ax.legend()
+        ax.grid(axis="y", alpha=0.2)
+        plt.xticks(rotation=35, ha="right")
+
+        return fig
+
   # ---------- kategorik x kategorik ----------
-  ny <- nlevels(d[[y]])
-  df <- as.data.frame(table(X = d[[x]], Y = d[[y]]), responseName = "n"); df$pct <- 100 * df$n / ave(df$n, df$X, FUN = sum)
-  if (type == "Heatmap tabulasi silang") {
-    tab <- as.data.frame(table(d[[x]], d[[y]])); names(tab) <- c("X", "Y", "Freq"); mid <- max(tab$Freq) / 2
-    return(ggplot(tab, aes(X, Y, fill = Freq)) + geom_tile(colour = "white") + geom_text(aes(label = Freq, colour = Freq > mid), show.legend = FALSE, fontface = "bold") +
-             scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = pk$txt)) + scale_fill_gradient(low = pk$bg, high = pk$d, name = "Jumlah") +
-             labs(title = paste(x, "dan", y), x = x, y = y) + theme_pink() + rot)
-  }
-  if (type == "Stacked bar chart")
-    return(ggplot(df, aes(X, n, fill = Y)) + geom_col(position = "stack", colour = "white") + scale_fill_manual(values = pal_cat(ny)) +
-             labs(title = paste("Stacked bar chart:", y, "dalam", x), subtitle = "Tinggi total batang = jumlah transaksi per kategori", x = x, y = "Jumlah transaksi", fill = y) + theme_pink() + rot)
-  if (type == "Segmented bar chart (100%)")
-    return(ggplot(df, aes(X, pct, fill = Y)) + geom_col(position = "stack", colour = "white") + scale_fill_manual(values = pal_cat(ny)) +
-             scale_y_continuous(labels = function(z) paste0(z, "%"), expand = expansion(mult = c(0, .02))) +
-             labs(title = paste("Segmented bar chart:", y, "dalam", x), subtitle = "Setiap batang = 100%; bandingkan komposisi antar kategori", x = x, y = "Persentase", fill = y) + theme_pink() + rot)
-  ggplot(df, aes(X, n, fill = Y)) + geom_col(position = position_dodge(.9)) + geom_text(aes(label = n), position = position_dodge(.9), vjust = -.3, size = 3, colour = pk$txt) +
-    scale_fill_manual(values = pal_cat(ny)) + scale_y_continuous(expand = expansion(mult = c(0, .1))) +
-    labs(title = paste("Grouped bar chart:", x, "dan", y), x = x, y = "Jumlah transaksi", fill = y) + theme_pink() + rot
-}
+  import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-bi_text <- function(d, x, y) {
-  xc <- x %in% cat_all; yc <- y %in% cat_all
-  if (!xc && !yc) {
-    ct <- cor.test(d[[x]], d[[y]]); sp <- suppressWarnings(cor.test(d[[x]], d[[y]], method = "spearman"))
-    fit <- lm(d[[y]] ~ d[[x]]); b <- coef(fit)[2]; r <- unname(ct$estimate)
-    tab <- data.frame(Ukuran = c("Korelasi Pearson (r)", "p-value Pearson", "Korelasi Spearman (rho)", "p-value Spearman", "Kemiringan garis (b1)", "R-kuadrat regresi sederhana"),
-                      Nilai = c(fmt(r, 3), fmt_p(ct$p.value), fmt(unname(sp$estimate), 3), fmt_p(sp$p.value), fmt(b, 3), fmt(summary(fit)$r.squared, 3)))
-    lines <- c(sprintf("Hubungan linear **%s** dan **%s** (r = %s; p %s).", strength(r), if (r > 0) "positif" else "negatif", fmt(r, 3), if (ct$p.value < .001) "< 0.001" else paste("=", fmt_p(ct$p.value))),
-               if (ct$p.value < .05) sprintf("Hubungan **signifikan** pada taraf 5%%: setiap kenaikan 1 satuan **%s**, rata-rata **%s** berubah sebesar **%s** satuan.", x, y, fmt(b, 3)) else "Hubungan **tidak signifikan** pada taraf 5%, sehingga tidak ada bukti hubungan linear antar kedua variabel.",
-               "Korelasi menunjukkan keterkaitan, bukan sebab-akibat.")
-    return(list(table = tab, lines = lines))
-  }
-  if (xc != yc) {
-    cv <- if (xc) x else y; nv <- if (xc) y else x
-    g <- d %>% group_by(.data[[cv]]) %>% summarise(`Rata-rata` = fmt(mean(.data[[nv]])), Median = fmt(median(.data[[nv]])), `Simpangan baku` = fmt(sd(.data[[nv]])), n = n(), .groups = "drop"); names(g)[1] <- cv
-    gm <- d %>% group_by(.data[[cv]]) %>% summarise(m = mean(.data[[nv]]), .groups = "drop"); names(gm)[1] <- "grp"
-    a <- summary(aov(d[[nv]] ~ d[[cv]]))[[1]]; p <- a[["Pr(>F)"]][1]; eta <- a[["Sum Sq"]][1] / sum(a[["Sum Sq"]])
-    kw <- kruskal.test(d[[nv]] ~ d[[cv]])$p.value
-    test <- if (nlevels(d[[cv]]) == 2) { tt <- t.test(d[[nv]] ~ d[[cv]]); p <- tt$p.value; sprintf("uji t Welch (t = %s)", fmt(unname(tt$statistic), 2)) } else sprintf("ANOVA (F = %s)", fmt(a[["F value"]][1], 2))
-    lines <- c(sprintf("Rata-rata **%s** tertinggi pada **%s** (%s) dan terendah pada **%s** (%s).", nv, gm$grp[which.max(gm$m)], fmt(max(gm$m)), gm$grp[which.min(gm$m)], fmt(min(gm$m))),
-               sprintf("Hasil %s: p %s; uji Kruskal-Wallis: p %s; ukuran efek eta-kuadrat = %s.", test, pq(p), pq(kw), fmt(eta, 3)),
-               if (p < .05) "Perbedaan rata-rata antar kelompok **signifikan** pada taraf 5%." else "Perbedaan rata-rata antar kelompok **tidak signifikan** pada taraf 5%; selisih yang tampak pada grafik dapat terjadi karena kebetulan.")
-    return(list(table = g, lines = lines))
-  }
-  tab <- table(d[[x]], d[[y]]); ch <- suppressWarnings(chisq.test(tab)); V <- sqrt(unname(ch$statistic) / (sum(tab) * (min(dim(tab)) - 1)))
-  ix <- which(tab == max(tab), arr.ind = TRUE)[1, ]
-  out <- cbind(setNames(data.frame(rownames(tab)), x), as.data.frame.matrix(tab))
-  lines <- c(sprintf("Kombinasi terbanyak: **%s** x **%s** (%d transaksi).", rownames(tab)[ix[1]], colnames(tab)[ix[2]], max(tab)),
-             sprintf("Uji Chi-square: X2 = %s, df = %d, p %s; Cramer's V = %s.", fmt(unname(ch$statistic), 2), unname(ch$parameter), pq(ch$p.value), fmt(V, 3)),
-             if (ch$p.value < .05) "Ada hubungan **signifikan** antar kedua variabel kategorik pada taraf 5%." else "**Tidak ada** hubungan signifikan antar kedua variabel kategorik pada taraf 5%.")
-  list(table = out, lines = lines)
-}
+from scipy import stats
+from scipy.stats import chi2_contingency, kruskal, ttest_ind
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from sklearn.linear_model import LinearRegression
 
+
+def bi_chart(d, x, y, type, pk, rot=None):
+    ny = d[y].nunique()
+
+    df = (
+        d.groupby([x, y], observed=False)
+        .size()
+        .reset_index(name="n")
+    )
+
+    df["pct"] = df["n"] / df.groupby(x)["n"].transform("sum") * 100
+
+    palette = pal_cat(ny)
+
+    if type == "Heatmap tabulasi silang":
+        tab = pd.crosstab(d[x], d[y])
+        mid = tab.values.max() / 2
+
+        fig, ax = plt.subplots(figsize=(9, 6))
+
+        sns.heatmap(
+            tab,
+            annot=True,
+            fmt="d",
+            linewidths=1,
+            linecolor="white",
+            cmap=sns.light_palette(pk["d"], as_cmap=True),
+            cbar_kws={"label": "Jumlah"},
+            ax=ax
+        )
+
+        for text in ax.texts:
+            value = int(text.get_text())
+            text.set_color("white" if value > mid else pk["txt"])
+            text.set_fontweight("bold")
+
+        ax.set_title(f"{x} dan {y}")
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+
+        if rot is not None:
+            plt.xticks(rotation=rot)
+
+        plt.tight_layout()
+        return fig
+
+    if type == "Stacked bar chart":
+        pivot = df.pivot(index=x, columns=y, values="n").fillna(0)
+
+        ax = pivot.plot(
+            kind="bar",
+            stacked=True,
+            color=palette,
+            edgecolor="white",
+            figsize=(9, 6)
+        )
+
+        ax.set_title(f"Stacked bar chart: {y} dalam {x}")
+        ax.set_xlabel(x)
+        ax.set_ylabel("Jumlah transaksi")
+        ax.legend(title=y)
+
+        ax.text(
+            0.5, 1.02,
+            "Tinggi total batang = jumlah transaksi per kategori",
+            transform=ax.transAxes,
+            ha="center"
+        )
+
+        if rot is not None:
+            plt.xticks(rotation=rot)
+
+        plt.tight_layout()
+        return ax.figure
+
+    if type == "Segmented bar chart (100%)":
+        pivot = df.pivot(index=x, columns=y, values="pct").fillna(0)
+
+        ax = pivot.plot(
+            kind="bar",
+            stacked=True,
+            color=palette,
+            edgecolor="white",
+            figsize=(9, 6)
+        )
+
+        ax.set_title(f"Segmented bar chart: {y} dalam {x}")
+        ax.set_xlabel(x)
+        ax.set_ylabel("Persentase")
+        ax.set_ylim(0, 102)
+        ax.set_yticks(np.arange(0, 101, 10))
+        ax.set_yticklabels([f"{z}%" for z in range(0, 101, 10)])
+        ax.legend(title=y)
+
+        ax.text(
+            0.5, 1.02,
+            "Setiap batang = 100%; bandingkan komposisi antar kategori",
+            transform=ax.transAxes,
+            ha="center"
+        )
+
+        if rot is not None:
+            plt.xticks(rotation=rot)
+
+        plt.tight_layout()
+        return ax.figure
+
+    if type == "Grouped bar chart":
+        fig, ax = plt.subplots(figsize=(9, 6))
+
+        sns.barplot(
+            data=df,
+            x=x,
+            y="n",
+            hue=y,
+            palette=palette,
+            errorbar=None,
+            ax=ax
+        )
+
+        for container in ax.containers:
+            ax.bar_label(
+                container,
+                fmt="%.0f",
+                padding=3,
+                fontsize=9,
+                color=pk["txt"]
+            )
+
+        ax.set_title(f"Grouped bar chart: {x} dan {y}")
+        ax.set_xlabel(x)
+        ax.set_ylabel("Jumlah transaksi")
+        ax.legend(title=y)
+
+        if rot is not None:
+            plt.xticks(rotation=rot)
+
+        plt.tight_layout()
+        return fig
+
+    return None
+
+
+def bi_text(d, x, y):
+
+    cat_all = globals().get("cat_all", [])
+
+    xc = x in cat_all
+    yc = y in cat_all
+
+    if not xc and not yc:
+
+        ct = stats.pearsonr(d[x], d[y])
+        sp = stats.spearmanr(d[x], d[y])
+
+        X = d[[x]]
+        Y = d[y]
+
+        model = LinearRegression()
+        model.fit(X, Y)
+
+        b = model.coef_[0]
+        r = ct.statistic
+        r2 = model.score(X, Y)
+
+        tab = pd.DataFrame({
+            "Ukuran": [
+                "Korelasi Pearson (r)",
+                "p-value Pearson",
+                "Korelasi Spearman (rho)",
+                "p-value Spearman",
+                "Kemiringan garis (b1)",
+                "R-kuadrat regresi sederhana"
+            ],
+            "Nilai": [
+                fmt(r, 3),
+                fmt_p(ct.pvalue),
+                fmt(sp.statistic, 3),
+                fmt_p(sp.pvalue),
+                fmt(b, 3),
+                fmt(r2, 3)
+            ]
+        })
+
+        lines = [
+            f"Hubungan linear **{strength(r)}** dan "
+            f"**{'positif' if r > 0 else 'negatif'}** "
+            f"(r = {fmt(r, 3)}; "
+            f"p {'< 0.001' if ct.pvalue < 0.001 else '= ' + fmt_p(ct.pvalue)}).",
+
+            (
+                f"Hubungan **signifikan** pada taraf 5%: setiap kenaikan "
+                f"1 satuan **{x}**, rata-rata **{y}** berubah sebesar "
+                f"**{fmt(b, 3)}** satuan."
+                if ct.pvalue < 0.05 else
+                "Hubungan **tidak signifikan** pada taraf 5%, "
+                "sehingga tidak ada bukti hubungan linear antar kedua variabel."
+            ),
+
+            "Korelasi menunjukkan keterkaitan, bukan sebab-akibat."
+        ]
+
+        return {"table": tab, "lines": lines}
+
+    if xc != yc:
+
+        cv = x if xc else y
+        nv = y if xc else x
+
+        g = (
+            d.groupby(cv, observed=False)[nv]
+            .agg(["mean", "median", "std", "count"])
+            .reset_index()
+        )
+
+        g.columns = [
+            cv,
+            "Rata-rata",
+            "Median",
+            "Simpangan baku",
+            "n"
+        ]
+
+        g["Rata-rata"] = g["Rata-rata"].apply(fmt)
+        g["Median"] = g["Median"].apply(fmt)
+        g["Simpangan baku"] = g["Simpangan baku"].apply(fmt)
+
+        gm = d.groupby(cv, observed=False)[nv].mean()
+
+        groups = [
+            group[nv].dropna().values
+            for _, group in d.groupby(cv, observed=False)
+        ]
+
+        groups = [group for group in groups if len(group) > 0]
+
+        model = ols(f'Q("{nv}") ~ C(Q("{cv}"))', data=d).fit()
+        a = anova_lm(model, typ=2)
+
+        p = a["PR(>F)"].iloc[0]
+
+        eta = (
+            a["sum_sq"].iloc[0] /
+            a["sum_sq"].sum()
+        )
+
+        kw = kruskal(*groups).pvalue
+
+        if d[cv].nunique() == 2:
+
+            tt = stats.ttest_ind(
+                *groups,
+                equal_var=False
+            )
+
+            p = tt.pvalue
+
+            test = f"uji t Welch (t = {fmt(tt.statistic, 2)})"
+
+        else:
+
+            F = a["F"].iloc[0]
+
+            test = f"ANOVA (F = {fmt(F, 2)})"
+
+        highest = gm.idxmax()
+        lowest = gm.idxmin()
+
+        lines = [
+            f"Rata-rata **{nv}** tertinggi pada "
+            f"**{highest}** ({fmt(gm.max())}) dan terendah pada "
+            f"**{lowest}** ({fmt(gm.min())}).",
+
+            f"Hasil {test}: p {pq(p)}; "
+            f"uji Kruskal-Wallis: p {pq(kw)}; "
+            f"ukuran efek eta-kuadrat = {fmt(eta, 3)}.",
+
+            (
+                "Perbedaan rata-rata antar kelompok **signifikan** pada taraf 5%."
+                if p < 0.05 else
+                "Perbedaan rata-rata antar kelompok **tidak signifikan** "
+                "pada taraf 5%; selisih yang tampak pada grafik dapat terjadi "
+                "karena kebetulan."
+            )
+        ]
+
+        return {"table": g, "lines": lines}
+
+    tab = pd.crosstab(d[x], d[y])
+
+    ch2, p_value, dof, expected = chi2_contingency(tab)
+
+    n = tab.values.sum()
+
+    V = np.sqrt(
+        ch2 / (n * (min(tab.shape) - 1))
+    )
+
+    ix = np.unravel_index(
+        np.argmax(tab.values),
+        tab.shape
+    )
+
+    out = tab.reset_index()
+
+    out.columns.name = None
+
+    lines = [
+        f"Kombinasi terbanyak: **{tab.index[ix[0]]}** x "
+        f"**{tab.columns[ix[1]]}** "
+        f"({int(tab.iloc[ix[0], ix[1]])} transaksi).",
+
+        f"Uji Chi-square: X2 = {fmt(ch2, 2)}, "
+        f"df = {dof}, p {pq(p_value)}; "
+        f"Cramer's V = {fmt(V, 3)}.",
+
+        (
+            "Ada hubungan **signifikan** antar kedua variabel kategorik pada taraf 5%."
+            if p_value < 0.05 else
+            "**Tidak ada** hubungan signifikan antar kedua variabel kategorik pada taraf 5%."
+        )
+    ]
+
+    return {"table": out, "lines": lines}
 # =============================================================================
 # 4. MULTIVARIAT
 # =============================================================================
