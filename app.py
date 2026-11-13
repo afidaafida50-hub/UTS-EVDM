@@ -28,25 +28,34 @@ bulan_lv = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
               "September","Oktober","November","Desember"]
 hari_lv  = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
 
-kamus = data.frame(
-  Variabel = ["Branch","Customer type","Gender","Product line","Quantity","Total",
-               "Date","Time","Payment","Rating","Hour (turunan)","Bulan (turunan)","Hari (turunan)"],
-  Tipe = ["Kategorik","Kategorik","Kategorik","Kategorik","Numerik (diskret)","Numerik (kontinu)",
-           "Tanggal","Waktu","Kategorik","Numerik (kontinu)","Numerik (diskret)","Kategorik","Kategorik"],
-  Definisi = ["Cabang supermarket tempat transaksi (A, B, C).",
-               "Tipe pelanggan: Member atau Normal.",
-               "Jenis kelamin pelanggan: Female atau Male.",
-               "Lini produk yang dibeli (6 kategori).",
-               "Jumlah unit barang yang dibeli dalam satu transaksi (1-10).",
-               "Nilai total transaksi termasuk pajak 5% (satuan mata uang pada data).",
-               "Tanggal transaksi.",
-               "Jam transaksi.",
-               "Metode pembayaran: Cash, Credit card, Ewallet.",
-               "Penilaian kepuasan pelanggan (skala 1-10, nilai teramati 4-10).",
-               "Jam transaksi (0-23) yang diambil dari Time.",
-               "Bulan transaksi yang diambil dari Date.",
-               "Hari dalam seminggu yang diambil dari Date."],
-  stringsAsFactors = FALSE)
+kamus = pd.DataFrame({
+    "Variabel": [
+        "Branch", "Customer type", "Gender", "Product line",
+        "Quantity", "Total", "Date", "Time", "Payment",
+        "Rating", "Hour (turunan)", "Bulan (turunan)", "Hari (turunan)"
+    ],
+    "Tipe": [
+        "Kategorik", "Kategorik", "Kategorik", "Kategorik",
+        "Numerik (diskret)", "Numerik (kontinu)", "Tanggal",
+        "Waktu", "Kategorik", "Numerik (kontinu)",
+        "Numerik (diskret)", "Kategorik", "Kategorik"
+    ],
+    "Definisi": [
+        "Cabang supermarket tempat transaksi (A, B, C).",
+        "Tipe pelanggan: Member atau Normal.",
+        "Jenis kelamin pelanggan: Female atau Male.",
+        "Lini produk yang dibeli (6 kategori).",
+        "Jumlah unit barang yang dibeli dalam satu transaksi (1-10).",
+        "Nilai total transaksi termasuk pajak 5% (satuan mata uang pada data).",
+        "Tanggal transaksi.",
+        "Jam transaksi.",
+        "Metode pembayaran: Cash, Credit card, Ewallet.",
+        "Penilaian kepuasan pelanggan (skala 1-10, nilai teramati 4-10).",
+        "Jam transaksi (0-23) yang diambil dari Time.",
+        "Bulan transaksi yang diambil dari Date.",
+        "Hari dalam seminggu yang diambil dari Date."
+    ]
+})
 
 # ---- Membaca dan menyiapkan data --------------------------------------------
 import pandas as pd
