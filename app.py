@@ -5098,366 +5098,2622 @@ pre{background:var(--p1);border:1px solid var(--ln);color:var(--tx);font-size:12
 #uni_stem{white-space:pre;overflow:auto;max-height:400px;font-size:12px;}
 """
 
-sel_cat  <- function(id, lab, sel) selectInput(id, lab, choices = cat_all, selected = sel)
-d0 <- tryCatch(read_sales(DATA_FILE), error = function(e) NULL)
-ch <- function(v, def) if (is.null(d0)) def else levels(d0[[v]])
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import date
 
-ui <- fluidPage(
-  tags$head(tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$style(HTML(css))),
-  div(class = "app-header", h1(APP_TITLE), p(class = "sub", "Ujian Tengah Semester Eksplorasi dan Visualisasi Data Multivariat  |  ", NAMA, "  |  ", NIM)),
-  sidebarLayout(
-    sidebarPanel(width = 3,
-                 h4("Sumber data"),
-                 fileInput("file", NULL, buttonLabel = "Pilih file", placeholder = "Excel/CSV (opsional)", accept = c(".xlsx", ".xls", ".csv")),
-                 h4("Filter data"),
-                 checkboxGroupInput("f_branch", "Branch", choices = ch("Branch", c("A","B","C")), selected = ch("Branch", c("A","B","C")), inline = TRUE),
-                 checkboxGroupInput("f_cust", "Customer type", choices = ch("Customer type", c("Member","Normal")), selected = ch("Customer type", c("Member","Normal")), inline = TRUE),
-                 checkboxGroupInput("f_gender", "Gender", choices = ch("Gender", c("Female","Male")), selected = ch("Gender", c("Female","Male")), inline = TRUE),
-                 checkboxGroupInput("f_pay", "Payment", choices = ch("Payment", c("Cash","Credit card","Ewallet")), selected = ch("Payment", c("Cash","Credit card","Ewallet"))),
-                 selectInput("f_prod", "Product line", choices = ch("Product line", NULL), selected = ch("Product line", NULL), multiple = TRUE),
-                 dateRangeInput("f_date", "Rentang tanggal", start = if (is.null(d0)) NULL else min(d0$Date), end = if (is.null(d0)) NULL else max(d0$Date), format = "dd-mm-yyyy", language = "id"),
-                 actionButton("f_reset", "Atur ulang filter", class = "btn-default btn-sm"),
-                 uiOutput("n_info")
-    ),
-    mainPanel(width = 9,
-              tabsetPanel(id = "tabs",
-                          # ------------------------------------------------------------ 1. DATA
-                          tabPanel("1. Masalah dan Data",
-                                   br(),
-                                   div(class = "box-x", h4("Latar belakang"), p(LATAR_BELAKANG)),
-                                   div(class = "box-x", h4("Tujuan analisis"), tags$ol(lapply(TUJUAN, tags$li))),
-                                   div(class = "box-x", h4("Sumber dan karakteristik data"), p(SUMBER_DATA), uiOutput("data_info")),
-                                   div(class = "box-x", h4("Definisi variabel"), tableOutput("kamus")),
-                                   div(class = "box-x", h4("Pengolahan data"), uiOutput("prep_info")),
-                                   div(class = "box-x", h4("Cuplikan data"), tableOutput("preview"))
-                          ),
-                          # -------------------------------------------------------- 2. UNIVARIAT
-                          tabPanel("2. Univariat",
-                                   br(),
-                                   fluidRow(column(4, selectInput("uni_var", "Variabel", choices = c(cat_all, num_all, "Date"), selected = "Total")), column(4, uiOutput("uni_type_ui"))),
-                                   fluidRow(column(7, div(class = "box-x", uiOutput("uni_main"))), column(5, div(class = "box-x", h4("Statistik deskriptif"), tableOutput("uni_table")))),
-                                   div(class = "box-x", h4("Interpretasi"), uiOutput("uni_interp"))
-                          ),
-                          # --------------------------------------------------------- 3. BIVARIAT
-                          tabPanel("3. Bivariat",
-                                   br(),
-                                   fluidRow(column(3, selectInput("bi_x", "Variabel X", choices = c(cat_all, num_all), selected = "Quantity")),
-                                            column(3, selectInput("bi_y", "Variabel Y", choices = c(cat_all, num_all), selected = "Total")),
-                                            column(3, uiOutput("bi_type_ui"))),
-                                   p(class = "help-note", "Jenis grafik menyesuaikan tipe pasangan variabel: numerik-numerik, kategorik-numerik, atau kategorik-kategorik."),
-                                   fluidRow(column(7, div(class = "box-x", plotOutput("bi_plot", height = 400))), column(5, div(class = "box-x", h4("Ringkasan dan uji"), tableOutput("bi_table")))),
-                                   div(class = "box-x", h4("Interpretasi"), uiOutput("bi_interp"))
-                          ),
-                          # ------------------------------------------------------- 4. MULTIVARIAT
-                          tabPanel("4. Multivariat",
-                                   br(),
-                                   tabsetPanel(type = "pills",
-                                               tabPanel("Scatter multivariat", br(),
-                                                        fluidRow(column(3, selectInput("mv_x", "Sumbu X", num_all, "Quantity")), column(3, selectInput("mv_y", "Sumbu Y", num_all, "Total")),
-                                                                 column(3, selectInput("mv_col", "Warna", c(NONE, cat_all, num_all), "Customer type")), column(3, selectInput("mv_size", "Ukuran titik", c(NONE, num_all), "Rating"))),
-                                                        fluidRow(column(3, selectInput("mv_facet", "Panel (facet)", c(NONE, cat_all), NONE)), column(3, checkboxInput("mv_lines", "Tampilkan garis regresi per kelompok", TRUE))),
-                                                        div(class = "box-x", plotOutput("mv_scatter", height = 440)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_scatter_i"))),
-                                               tabPanel("Heatmap rata-rata", br(),
-                                                        fluidRow(column(3, sel_cat("mv_ha", "Kategorik 1 (sumbu X)", "Branch")), column(3, sel_cat("mv_hb", "Kategorik 2 (sumbu Y)", "Product line")),
-                                                                 column(3, selectInput("mv_hn", "Variabel numerik", num_all, "Total")), column(3, selectInput("mv_hf", "Ukuran", c("Rata-rata", "Median", "Jumlah", "Banyak transaksi"), "Rata-rata"))),
-                                                        div(class = "box-x", plotOutput("mv_heat", height = 420)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_heat_i"))),
-                                               tabPanel("Matriks korelasi", br(),
-                                                        fluidRow(column(6, checkboxGroupInput("mv_cv", "Variabel numerik", num_all, num_all, inline = TRUE)), column(3, selectInput("mv_cm", "Metode", c("pearson", "spearman"), "pearson"))),
-                                                        div(class = "box-x", plotOutput("mv_cor", height = 420)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_cor_i"))),
-                                               tabPanel("Tren waktu", br(),
-                                                        fluidRow(column(3, selectInput("mv_tm", "Metrik", c("Jumlah transaksi", "Total penjualan (jumlah)", "Rata-rata Total", "Rata-rata Rating", "Total Quantity"), "Total penjualan (jumlah)")),
-                                                                 column(3, selectInput("mv_tu", "Satuan waktu", c("Harian", "Mingguan", "Bulanan"), "Mingguan")), column(3, selectInput("mv_tg", "Kelompok", c(NONE, cat_base), "Branch"))),
-                                                        div(class = "box-x", plotOutput("mv_trend", height = 420)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_trend_i"))),
-                                               tabPanel("PCA", br(),
-                                                        fluidRow(column(6, checkboxGroupInput("mv_pv", "Variabel numerik (minimal 3)", num_all, num_all, inline = TRUE)), column(3, selectInput("mv_pc", "Warna titik", c(NONE, cat_base), "Customer type"))),
-                                                        fluidRow(column(7, div(class = "box-x", plotOutput("mv_pca", height = 420))), column(5, div(class = "box-x", h4("Keragaman dan loading"), tableOutput("mv_pca_t")))),
-                                                        div(class = "box-x", h4("Interpretasi"), uiOutput("mv_pca_i"))),
-                                               tabPanel("Scatterplot matrix", br(),
-                                                        fluidRow(column(6, checkboxGroupInput("mv_mvars", "Variabel numerik (minimal 2)", num_all, num_all, inline = TRUE)), column(3, selectInput("mv_mcol", "Warna titik", c(NONE, cat_base), NONE))),
-                                                        div(class = "box-x", plotOutput("mv_pairs", height = 540)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_pairs_i"))),
-                                               tabPanel("Pencilan Mahalanobis", br(),
-                                                        fluidRow(column(8, checkboxGroupInput("mv_dvars", "Variabel numerik (minimal 2)", num_all, num_all, inline = TRUE))),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("mv_mh1", height = 380))), column(6, div(class = "box-x", plotOutput("mv_mh2", height = 380)))),
-                                                        div(class = "box-x", h4("Sepuluh observasi dengan jarak terbesar"), tableOutput("mv_mh_t")), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_mh_i"))),
-                                               tabPanel("Q-Q plot Chi-Square", br(),
-                                                        fluidRow(column(8, checkboxGroupInput("mv_qvars", "Variabel numerik (minimal 2)", num_all, num_all, inline = TRUE))),
-                                                        div(class = "box-x", plotOutput("mv_qq", height = 440)), div(class = "box-x", h4("Interpretasi"), uiOutput("mv_qq_i")))
-                                   )
-                          ),
-                          # ---------------------------------------------------------- 5. REGRESI
-                          tabPanel("5. Regresi Linear Berganda",
-                                   br(),
-                                   div(class = "box-x", h4("Spesifikasi model"),
-                                       fluidRow(column(3, selectInput("rg_y", "Variabel respons (Y)", c("Total", "Rating"), "Total")),
-                                                column(5, checkboxGroupInput("rg_x", "Variabel prediktor (X)", c("Quantity", "Rating", "Hour", cat_all), c("Quantity", "Rating", "Hour", cat_base), inline = TRUE)),
-                                                column(2, radioButtons("rg_log", "Transformasi respons", c("Tanpa" = "no", "ln(Y)" = "yes"), "no")),
-                                                column(2, br(), actionButton("rg_go", "Bangun model", class = "btn-pink"))),
-                                       p(class = "help-note", "Respons Total dipilih karena merupakan ukuran utama nilai transaksi. Pilih minimal dua prediktor. Variabel kategorik otomatis diubah menjadi dummy dengan kategori pertama sebagai acuan.")),
-                                   tabsetPanel(type = "pills",
-                                               tabPanel("Hasil model", br(),
-                                                        div(class = "box-x", h4("Persamaan model"), verbatimTextOutput("rg_eq")),
-                                                        fluidRow(column(5, div(class = "box-x", h4("Ukuran kecocokan model"), tableOutput("rg_fit"))), column(7, div(class = "box-x", h4("Uji signifikansi per variabel (ANOVA)"), tableOutput("rg_anova")))),
-                                                        div(class = "box-x", h4("Estimasi koefisien"), tableOutput("rg_coef"), p(class = "help-note", "Signif.: *** p<0.001, ** p<0.01, * p<0.05, . p<0.1")),
-                                                        div(class = "box-x", h4("Interpretasi hasil"), uiOutput("rg_interp"))),
-                                               tabPanel("Visualisasi hasil model", br(),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rg_p1", height = 380))), column(6, div(class = "box-x", plotOutput("rg_p2", height = 380)))),
-                                                        div(class = "box-x", h4("Cara membaca"), uiOutput("rg_vis_i"))),
-                                               tabPanel("Galeri visualisasi regresi", br(),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rv1", height = 340))), column(6, div(class = "box-x", plotOutput("rv2", height = 340)))),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rv3", height = 340))), column(6, div(class = "box-x", plotOutput("rv4", height = 340)))),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rv5", height = 340))), column(6, div(class = "box-x", plotOutput("rv6", height = 340)))),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rv7", height = 340))), column(6, div(class = "box-x", plotOutput("rv8", height = 340)))),
-                                                        div(class = "box-x", h4("Cara membaca"), uiOutput("rv_i"))),
-                                               tabPanel("Diagnostik asumsi", br(),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rg_d1", height = 320))), column(6, div(class = "box-x", plotOutput("rg_d2", height = 320)))),
-                                                        fluidRow(column(6, div(class = "box-x", plotOutput("rg_d3", height = 320))), column(6, div(class = "box-x", plotOutput("rg_d4", height = 320)))),
-                                                        fluidRow(column(6, div(class = "box-x", h4("Uji asumsi"), tableOutput("rg_tests"))), column(6, div(class = "box-x", h4("Multikolinearitas (VIF)"), tableOutput("rg_vif"))))),
-                                               tabPanel("Keterbatasan model", br(), div(class = "box-x", h4("Keterbatasan model yang digunakan"), bullets(KETERBATASAN)))
-                                   )
-                          ),
-                          # ------------------------------------------------------- 6. KESIMPULAN
-                          tabPanel("6. Kesimpulan",
-                                   br(),
-                                   div(class = "box-x", h4("Kesimpulan utama"), uiOutput("kes_auto")),
-                                   div(class = "box-x", h4("Rekomendasi"), bullets(REKOMENDASI))
-                          )
-              )
-    )
-  )
+# ============================================================
+# KONFIGURASI HALAMAN
+# ============================================================
+
+st.set_page_config(
+    page_title=APP_TITLE,
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# ============================================================
+# FUNGSI BANTUAN
+# ============================================================
+
+def sel_cat(label, options, selected=None):
+    return st.selectbox(
+        label,
+        options=options,
+        index=options.index(selected)
+        if selected in options else 0
+    )
+
+
+def bullets(items):
+    for item in items:
+        st.markdown(f"- {item}")
+
+
+def show_table(data):
+    if data is not None:
+        st.dataframe(data, use_container_width=True, hide_index=True)
+
+
+def show_plot(fig):
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def show_interpretation(content):
+    if isinstance(content, (list, tuple)):
+        for item in content:
+            st.markdown(f"- {item}")
+    elif content:
+        st.markdown(content)
+
+
+# ============================================================
+# MEMBACA DATA AWAL
+# ============================================================
+
+try:
+    d0 = read_sales(DATA_FILE)
+except Exception:
+    d0 = None
+
+
+def ch(variable, default):
+    if d0 is None or variable not in d0.columns:
+        return default
+
+    values = d0[variable].dropna().unique().tolist()
+    return sorted(values, key=str)
+
+
+# ============================================================
+# CSS
+# ============================================================
+
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-color: #FFF8FB;
+    }}
+
+    .app-header {{
+        background: linear-gradient(135deg, #F7DCE8, #FCECF3);
+        padding: 25px 30px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #F0D2DF;
+    }}
+
+    .app-header h1 {{
+        color: #8E4968;
+        font-size: 30px;
+        margin-bottom: 5px;
+    }}
+
+    .app-header p {{
+        color: #8E4968;
+        font-size: 13px;
+    }}
+
+    .box-x {{
+        background-color: white;
+        border: 1px solid #F0DCE5;
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 15px;
+    }}
+
+    .box-x h3, .box-x h4 {{
+        color: #A45D7D;
+    }}
+
+    div.stButton > button {{
+        background-color: #D98BAE;
+        color: white;
+        border: none;
+        border-radius: 8px;
+    }}
+
+    div.stButton > button:hover {{
+        background-color: #BF6F95;
+        color: white;
+    }}
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# HEADER APLIKASI
+# ============================================================
+
+st.markdown(
+    f"""
+    <div class="app-header">
+        <h1>{APP_TITLE}</h1>
+        <p>
+            Ujian Tengah Semester Eksplorasi dan Visualisasi Data Multivariat
+            | {NAMA} | {NIM}
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# SIDEBAR: SUMBER DATA DAN FILTER
+# ============================================================
+
+st.sidebar.header("Sumber data")
+
+uploaded_file = st.sidebar.file_uploader(
+    "Pilih file",
+    type=["xlsx", "xls", "csv"],
+    help="Excel/CSV (opsional)"
+)
+
+# Membaca file unggahan
+if uploaded_file is not None:
+    try:
+        if uploaded_file.name.lower().endswith(".csv"):
+            raw_data = pd.read_csv(uploaded_file)
+        else:
+            raw_data = pd.read_excel(uploaded_file)
+
+        d0 = prepare_sales(raw_data)
+
+        st.sidebar.success("Data berhasil dimuat.")
+
+    except Exception as e:
+        st.sidebar.error(f"Gagal membaca data: {e}")
+
+# Jika tidak ada file unggahan, gunakan data awal
+if d0 is None:
+    st.error("Data belum tersedia. Silakan unggah file Excel atau CSV.")
+    st.stop()
+
+
+# Tombol reset filter
+if st.sidebar.button("Atur ulang filter"):
+    st.session_state.clear()
+    st.rerun()
+
+
+st.sidebar.header("Filter data")
+
+# Filter Branch
+branch_options = ch("Branch", ["A", "B", "C"])
+
+f_branch = st.sidebar.multiselect(
+    "Branch",
+    options=branch_options,
+    default=branch_options,
+    key="f_branch"
+)
+
+# Filter Customer type
+cust_options = ch("Customer type", ["Member", "Normal"])
+
+f_cust = st.sidebar.multiselect(
+    "Customer type",
+    options=cust_options,
+    default=cust_options,
+    key="f_cust"
+)
+
+# Filter Gender
+gender_options = ch("Gender", ["Female", "Male"])
+
+f_gender = st.sidebar.multiselect(
+    "Gender",
+    options=gender_options,
+    default=gender_options,
+    key="f_gender"
+)
+
+# Filter Payment
+pay_options = ch("Payment", ["Cash", "Credit card", "Ewallet"])
+
+f_pay = st.sidebar.multiselect(
+    "Payment",
+    options=pay_options,
+    default=pay_options,
+    key="f_pay"
+)
+
+# Filter Product line
+prod_options = ch("Product line", [])
+
+f_prod = st.sidebar.multiselect(
+    "Product line",
+    options=prod_options,
+    default=prod_options,
+    key="f_prod"
+)
+
+# Filter tanggal
+if "Date" in d0.columns:
+    min_date = pd.to_datetime(d0["Date"]).min().date()
+    max_date = pd.to_datetime(d0["Date"]).max().date()
+
+    f_date = st.sidebar.date_input(
+        "Rentang tanggal",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        format="DD-MM-YYYY"
+    )
+else:
+    f_date = None
+
+
+# ============================================================
+# MENERAPKAN FILTER DATA
+# ============================================================
+
+d = d0.copy()
+
+if "Branch" in d.columns:
+    d = d[d["Branch"].isin(f_branch)]
+
+if "Customer type" in d.columns:
+    d = d[d["Customer type"].isin(f_cust)]
+
+if "Gender" in d.columns:
+    d = d[d["Gender"].isin(f_gender)]
+
+if "Payment" in d.columns:
+    d = d[d["Payment"].isin(f_pay)]
+
+if "Product line" in d.columns:
+    d = d[d["Product line"].isin(f_prod)]
+
+if f_date is not None and len(f_date) == 2:
+    d["Date"] = pd.to_datetime(d["Date"])
+
+    d = d[
+        (d["Date"].dt.date >= f_date[0]) &
+        (d["Date"].dt.date <= f_date[1])
+    ]
+
+
+# Informasi jumlah data
+st.sidebar.markdown("---")
+st.sidebar.metric(
+    "Jumlah transaksi",
+    f"{len(d):,}"
+)
+
+st.sidebar.caption(
+    f"Data awal: {len(d0):,} transaksi"
+)
+
+
+# ============================================================
+# DEFINISI VARIABEL DAN PILIHAN
+# ============================================================
+
+cat_all = [
+    col for col in cat_all
+    if col in d.columns
+]
+
+num_all = [
+    col for col in num_all
+    if col in d.columns
+]
+
+cat_base = [
+    col for col in cat_all
+    if col in d.columns
+]
+
+NONE = "Tidak ada"
+
+
+# ============================================================
+# TAB UTAMA
+# ============================================================
+
+tabs = st.tabs([
+    "1. Masalah dan Data",
+    "2. Univariat",
+    "3. Bivariat",
+    "4. Multivariat",
+    "5. Regresi Linear Berganda",
+    "6. Kesimpulan"
+])
+
+
+# ============================================================
+# 1. MASALAH DAN DATA
+# ============================================================
+
+with tabs[0]:
+
+    st.markdown("### Latar belakang")
+    st.markdown(f'<div class="box-x">{LATAR_BELAKANG}</div>',
+                unsafe_allow_html=True)
+
+    st.markdown("### Tujuan analisis")
+    bullets(TUJUAN)
+
+    st.markdown("### Sumber dan karakteristik data")
+    st.markdown(SUMBER_DATA)
+
+    st.markdown("### Informasi data")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Jumlah observasi", f"{len(d):,}")
+
+    with col2:
+        st.metric("Jumlah variabel", len(d.columns))
+
+    with col3:
+        st.metric("Data kosong", int(d.isna().sum().sum()))
+
+    st.markdown("### Definisi variabel")
+
+    if "KAMUS" in globals():
+        show_table(KAMUS)
+
+    st.markdown("### Pengolahan data")
+
+    if "prep_info" in globals():
+        show_interpretation(prep_info)
+
+    st.markdown("### Cuplikan data")
+    st.dataframe(d.head(10), use_container_width=True)
+
+
+# ============================================================
+# 2. UNIVARIAT
+# ============================================================
+
+with tabs[1]:
+
+    st.markdown("### Analisis univariat")
+
+    uni_options = cat_all + num_all + (
+        ["Date"] if "Date" in d.columns else []
+    )
+
+    uni_var = st.selectbox(
+        "Variabel",
+        uni_options,
+        index=uni_options.index("Total")
+        if "Total" in uni_options else 0
+    )
+
+    col1, col2 = st.columns([7, 5])
+
+    with col1:
+        st.markdown("#### Visualisasi")
+
+        # Menggunakan fungsi visualisasi univariat sebelumnya
+        if "uni_plot" in globals():
+            fig = uni_plot(d, uni_var)
+            show_plot(fig)
+
+    with col2:
+        st.markdown("#### Statistik deskriptif")
+
+        if "uni_stats" in globals():
+            stats = uni_stats(d, uni_var)
+            show_table(stats)
+
+    st.markdown("### Interpretasi")
+
+    if "uni_text" in globals():
+        show_interpretation(uni_text(d, uni_var))
+
+
+# ============================================================
+# 3. BIVARIAT
+# ============================================================
+
+with tabs[2]:
+
+    st.markdown("### Analisis bivariat")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        bi_x = st.selectbox(
+            "Variabel X",
+            cat_all + num_all,
+            index=(cat_all + num_all).index("Quantity")
+            if "Quantity" in cat_all + num_all else 0
+        )
+
+    with col2:
+        bi_y = st.selectbox(
+            "Variabel Y",
+            cat_all + num_all,
+            index=(cat_all + num_all).index("Total")
+            if "Total" in cat_all + num_all else 0
+        )
+
+    with col3:
+        st.markdown("#### Jenis visualisasi")
+        bi_type = None
+
+    st.info(
+        "Jenis grafik menyesuaikan tipe pasangan variabel: "
+        "numerik-numerik, kategorik-numerik, atau kategorik-kategorik."
+    )
+
+    col1, col2 = st.columns([7, 5])
+
+    with col1:
+        st.markdown("#### Visualisasi")
+        if "bi_plot" in globals():
+            fig = bi_plot(d, bi_x, bi_y)
+            show_plot(fig)
+
+    with col2:
+        st.markdown("#### Ringkasan dan uji")
+        if "bi_summary" in globals():
+            show_table(bi_summary(d, bi_x, bi_y))
+
+    st.markdown("### Interpretasi")
+
+    if "bi_text" in globals():
+        show_interpretation(bi_text(d, bi_x, bi_y))
+
+
+# ============================================================
+# 4. MULTIVARIAT
+# ============================================================
+
+with tabs[3]:
+
+    mv_tabs = st.tabs([
+        "Scatter multivariat",
+        "Heatmap rata-rata",
+        "Matriks korelasi",
+        "Tren waktu",
+        "PCA",
+        "Scatterplot matrix",
+        "Pencilan Mahalanobis",
+        "Q-Q plot Chi-Square"
+    ])
+
+
+    # --------------------------------------------------------
+    # 4.1 SCATTER MULTIVARIAT
+    # --------------------------------------------------------
+
+    with mv_tabs[0]:
+
+        st.markdown("### Scatter multivariat")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            mv_x = st.selectbox("Sumbu X", num_all, key="mv_x")
+
+        with col2:
+            mv_y = st.selectbox("Sumbu Y", num_all, key="mv_y")
+
+        with col3:
+            mv_col = st.selectbox(
+                "Warna",
+                [NONE] + cat_all + num_all,
+                index=(
+                    [NONE] + cat_all + num_all
+                ).index("Customer type")
+                if "Customer type" in cat_all else 0,
+                key="mv_col"
+            )
+
+        with col4:
+            mv_size = st.selectbox(
+                "Ukuran titik",
+                [NONE] + num_all,
+                index=(
+                    [NONE] + num_all
+                ).index("Rating")
+                if "Rating" in num_all else 0,
+                key="mv_size"
+            )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            mv_facet = st.selectbox(
+                "Panel (facet)",
+                [NONE] + cat_all,
+                key="mv_facet"
+            )
+
+        with col2:
+            mv_lines = st.checkbox(
+                "Tampilkan garis regresi per kelompok",
+                value=True,
+                key="mv_lines"
+            )
+
+        if "mv_scatter" in globals():
+            fig = mv_scatter(
+                d,
+                mv_x,
+                mv_y,
+                mv_col,
+                mv_size,
+                mv_facet,
+                mv_lines
+            )
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_scatter_text" in globals():
+            show_interpretation(
+                mv_scatter_text(
+                    d, mv_x, mv_y, mv_col, mv_size
+                )
+            )
+
+
+    # --------------------------------------------------------
+    # 4.2 HEATMAP RATA-RATA
+    # --------------------------------------------------------
+
+    with mv_tabs[1]:
+
+        st.markdown("### Heatmap rata-rata")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            mv_ha = sel_cat(
+                "Kategorik 1 (sumbu X)",
+                cat_all,
+                "Branch"
+            )
+
+        with col2:
+            mv_hb = sel_cat(
+                "Kategorik 2 (sumbu Y)",
+                cat_all,
+                "Product line"
+            )
+
+        with col3:
+            mv_hn = st.selectbox(
+                "Variabel numerik",
+                num_all,
+                index=num_all.index("Total")
+                if "Total" in num_all else 0
+            )
+
+        with col4:
+            mv_hf = st.selectbox(
+                "Ukuran",
+                ["Rata-rata", "Median", "Jumlah", "Banyak transaksi"]
+            )
+
+        if "mv_heat" in globals():
+            fig = mv_heat(d, mv_ha, mv_hb, mv_hn, mv_hf)
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_heat_text" in globals():
+            show_interpretation(
+                mv_heat_text(d, mv_ha, mv_hb, mv_hn, mv_hf)
+            )
+
+
+    # --------------------------------------------------------
+    # 4.3 MATRIKS KORELASI
+    # --------------------------------------------------------
+
+    with mv_tabs[2]:
+
+        st.markdown("### Matriks korelasi")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            mv_cv = st.multiselect(
+                "Variabel numerik",
+                num_all,
+                default=num_all
+            )
+
+        with col2:
+            mv_cm = st.selectbox(
+                "Metode",
+                ["pearson", "spearman"]
+            )
+
+        if "mv_cor" in globals():
+            fig = mv_cor(d, mv_cv, mv_cm)
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_cor_text" in globals():
+            show_interpretation(
+                mv_cor_text(d, mv_cv, mv_cm)
+            )
+
+
+    # --------------------------------------------------------
+    # 4.4 TREN WAKTU
+    # --------------------------------------------------------
+
+    with mv_tabs[3]:
+
+        st.markdown("### Tren waktu")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            mv_tm = st.selectbox(
+                "Metrik",
+                [
+                    "Jumlah transaksi",
+                    "Total penjualan (jumlah)",
+                    "Rata-rata Total",
+                    "Rata-rata Rating",
+                    "Total Quantity"
+                ]
+            )
+
+        with col2:
+            mv_tu = st.selectbox(
+                "Satuan waktu",
+                ["Harian", "Mingguan", "Bulanan"],
+                index=1
+            )
+
+        with col3:
+            mv_tg = st.selectbox(
+                "Kelompok",
+                [NONE] + cat_base
+            )
+
+        if "mv_trend" in globals():
+            fig = mv_trend(d, mv_tm, mv_tu, mv_tg)
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_trend_text" in globals():
+            show_interpretation(
+                mv_trend_text(d, mv_tm, mv_tu, mv_tg)
+            )
+
+
+    # --------------------------------------------------------
+    # 4.5 PCA
+    # --------------------------------------------------------
+
+    with mv_tabs[4]:
+
+        st.markdown("### Principal Component Analysis (PCA)")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            mv_pv = st.multiselect(
+                "Variabel numerik (minimal 3)",
+                num_all,
+                default=num_all
+            )
+
+        with col2:
+            mv_pc = st.selectbox(
+                "Warna titik",
+                [NONE] + cat_base
+            )
+
+        col1, col2 = st.columns([7, 5])
+
+        with col1:
+            if "mv_pca" in globals():
+                fig = mv_pca(d, mv_pv, mv_pc)
+                show_plot(fig)
+
+        with col2:
+            st.markdown("#### Keragaman dan loading")
+
+            if "mv_pca_table" in globals():
+                show_table(mv_pca_table(d, mv_pv))
+
+        st.markdown("### Interpretasi")
+
+        if "mv_pca_text" in globals():
+            show_interpretation(
+                mv_pca_text(d, mv_pv, mv_pc)
+            )
+
+
+    # --------------------------------------------------------
+    # 4.6 SCATTERPLOT MATRIX
+    # --------------------------------------------------------
+
+    with mv_tabs[5]:
+
+        st.markdown("### Scatterplot matrix")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            mv_mvars = st.multiselect(
+                "Variabel numerik (minimal 2)",
+                num_all,
+                default=num_all
+            )
+
+        with col2:
+            mv_mcol = st.selectbox(
+                "Warna titik",
+                [NONE] + cat_base
+            )
+
+        if "mv_pairs" in globals():
+            fig = mv_pairs(d, mv_mvars, mv_mcol)
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_pairs_text" in globals():
+            show_interpretation(
+                mv_pairs_text(d, mv_mvars, mv_mcol)
+            )
+
+
+    # --------------------------------------------------------
+    # 4.7 PENENCILAN MAHALANOBIS
+    # --------------------------------------------------------
+
+    with mv_tabs[6]:
+
+        st.markdown("### Pencilan Mahalanobis")
+
+        mv_dvars = st.multiselect(
+            "Variabel numerik (minimal 2)",
+            num_all,
+            default=num_all
+        )
+
+        col1, col2 = st.columns(2)
+
+        if "mv_mahalanobis" in globals():
+
+            result = mv_mahalanobis(d, mv_dvars)
+
+            with col1:
+                show_plot(result.get("plot1"))
+
+            with col2:
+                show_plot(result.get("plot2"))
+
+            st.markdown("### Sepuluh observasi dengan jarak terbesar")
+            show_table(result.get("table"))
+
+            st.markdown("### Interpretasi")
+            show_interpretation(result.get("interpretation"))
+
+
+    # --------------------------------------------------------
+    # 4.8 Q-Q PLOT CHI-SQUARE
+    # --------------------------------------------------------
+
+    with mv_tabs[7]:
+
+        st.markdown("### Q-Q plot Chi-Square")
+
+        mv_qvars = st.multiselect(
+            "Variabel numerik (minimal 2)",
+            num_all,
+            default=num_all
+        )
+
+        if "mv_qq" in globals():
+            fig = mv_qq(d, mv_qvars)
+            show_plot(fig)
+
+        st.markdown("### Interpretasi")
+
+        if "mv_qq_text" in globals():
+            show_interpretation(
+                mv_qq_text(d, mv_qvars)
+            )
+
+
+# ============================================================
+# 5. REGRESI LINEAR BERGANDA
+# ============================================================
+
+with tabs[4]:
+
+    st.markdown("### Spesifikasi model")
+
+    col1, col2, col3 = st.columns([3, 5, 2])
+
+    with col1:
+        rg_y = st.selectbox(
+            "Variabel respons (Y)",
+            ["Total", "Rating"]
+        )
+
+    with col2:
+        predictor_options = (
+            ["Quantity", "Rating", "Hour"] + cat_all
+        )
+
+        rg_x = st.multiselect(
+            "Variabel prediktor (X)",
+            predictor_options,
+            default=[
+                x for x in
+                ["Quantity", "Rating", "Hour"] + cat_base
+                if x != rg_y
+            ]
+        )
+
+    with col3:
+        rg_log = st.radio(
+            "Transformasi respons",
+            ["Tanpa", "ln(Y)"]
+        )
+
+    st.caption(
+        "Respons Total dipilih karena merupakan ukuran utama nilai "
+        "transaksi. Pilih minimal dua prediktor. Variabel kategorik "
+        "otomatis diubah menjadi dummy dengan kategori pertama "
+        "sebagai acuan."
+    )
+
+    # Membangun model
+    if st.button("Bangun model", key="rg_go"):
+
+        if len(rg_x) < 2:
+            st.warning("Pilih minimal dua variabel prediktor.")
+
+        elif rg_y in rg_x:
+            st.warning(
+                "Variabel respons tidak boleh menjadi prediktor."
+            )
+
+        elif rg_log == "ln(Y)" and (d[rg_y] <= 0).any():
+            st.warning(
+                "Transformasi ln(Y) hanya dapat dilakukan jika "
+                "seluruh nilai Y lebih besar dari nol."
+            )
+
+        else:
+            try:
+                model = build_model(
+                    d,
+                    rg_y,
+                    rg_x,
+                    rg_log == "ln(Y)"
+                )
+
+                st.session_state["rg_model"] = model
+                st.session_state["rg_y"] = rg_y
+                st.session_state["rg_x"] = rg_x
+                st.session_state["rg_log"] = (
+                    rg_log == "ln(Y)"
+                )
+
+                st.success("Model regresi berhasil dibangun.")
+
+            except Exception as e:
+                st.error(f"Gagal membangun model: {e}")
+
+
+    # Mengambil model yang sudah dibangun
+    model = st.session_state.get("rg_model")
+
+    if model is not None:
+
+        rg_y = st.session_state["rg_y"]
+        rg_x = st.session_state["rg_x"]
+        logy = st.session_state["rg_log"]
+
+        rg_tabs = st.tabs([
+            "Hasil model",
+            "Visualisasi hasil model",
+            "Galeri visualisasi regresi",
+            "Diagnostik asumsi",
+            "Keterbatasan model"
+        ])
+
+
+        # ----------------------------------------------------
+        # 5.1 HASIL MODEL
+        # ----------------------------------------------------
+
+        with rg_tabs[0]:
+
+            st.markdown("#### Persamaan model")
+
+            st.code(
+                make_equation(model, rg_y, logy),
+                language="text"
+            )
+
+            col1, col2 = st.columns([5, 7])
+
+            with col1:
+                st.markdown("#### Ukuran kecocokan model")
+                show_table(fit_table(model))
+
+            with col2:
+                st.markdown("#### Uji signifikansi per variabel (ANOVA)")
+                show_table(anova_table(model))
+
+            st.markdown("#### Estimasi koefisien")
+            show_table(coef_table(model))
+
+            st.caption(
+                "Signif.: *** p<0.001, ** p<0.01, "
+                "* p<0.05, . p<0.1"
+            )
+
+            st.markdown("#### Interpretasi hasil")
+            show_interpretation(
+                interp_reg(model, rg_y, logy)
+            )
+
+
+        # ----------------------------------------------------
+        # 5.2 VISUALISASI HASIL MODEL
+        # ----------------------------------------------------
+
+        with rg_tabs[1]:
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(plot_reg_avp(model))
+
+            with col2:
+                show_plot(plot_reg_coef(model))
+
+            st.markdown("### Cara membaca")
+
+            if "reg_vis_text" in globals():
+                show_interpretation(reg_vis_text(model))
+
+
+        # ----------------------------------------------------
+        # 5.3 GALERI VISUALISASI REGRESI
+        # ----------------------------------------------------
+
+        with rg_tabs[2]:
+
+            plots = [
+                plot_reg_resid(model),
+                plot_reg_qq(model),
+                plot_reg_scale(model),
+                plot_reg_cook(model),
+                plot_reg_scatter(d, model),
+                plot_reg_cor(d, rg_x),
+                plot_reg_hist(model),
+                plot_reg_obsres(model)
+            ]
+
+            for i in range(0, len(plots), 2):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    show_plot(plots[i])
+
+                with col2:
+                    if i + 1 < len(plots):
+                        show_plot(plots[i + 1])
+
+            st.markdown("### Cara membaca")
+
+            if "reg_gallery_text" in globals():
+                show_interpretation(
+                    reg_gallery_text(model)
+                )
+
+
+        # ----------------------------------------------------
+        # 5.4 DIAGNOSTIK ASUMSI
+        # ----------------------------------------------------
+
+        with rg_tabs[3]:
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(plot_reg_resid(model))
+
+            with col2:
+                show_plot(plot_reg_qq(model))
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(plot_reg_scale(model))
+
+            with col2:
+                show_plot(plot_reg_cook(model))
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### Uji asumsi")
+
+                tests = {
+                    "Breusch-Pagan": bp_test(model)
+                }
+
+                show_table(
+                    pd.DataFrame(tests)
+                    if isinstance(tests["Breusch-Pagan"], pd.DataFrame)
+                    else pd.DataFrame([tests])
+                )
+
+            with col2:
+                st.markdown("#### Multikolinearitas (VIF)")
+                show_table(vif_table(model))
+
+
+        # ----------------------------------------------------
+        # 5.5 KETERBATASAN MODEL
+        # ----------------------------------------------------
+
+        with rg_tabs[4]:
+
+            st.markdown("### Keterbatasan model yang digunakan")
+            bullets(KETERBATASAN)
+
+    else:
+        st.info(
+            "Pilih variabel respons dan prediktor, kemudian klik "
+            "'Bangun model' untuk melihat hasil regresi."
+        )
+
+
+# ============================================================
+# 6. KESIMPULAN
+# ============================================================
+
+with tabs[5]:
+
+    st.markdown("### Kesimpulan utama")
+
+    model = st.session_state.get("rg_model")
+
+    if model is not None:
+
+        conclusions = auto_conclusion(
+            d,
+            model,
+            st.session_state["rg_y"],
+            st.session_state["rg_log"]
+        )
+
+        show_interpretation(conclusions)
+
+    else:
+        st.info(
+            "Bangun model regresi terlebih dahulu untuk menampilkan "
+            "kesimpulan otomatis."
+        )
+
+    st.markdown("### Rekomendasi")
+    bullets(REKOMENDASI)
 
 # =============================================================================
 # SERVER
 # =============================================================================
-server <- function(input, output, session) {
-  
-  data_raw <- reactive({
-    d <- if (!is.null(input$file)) read_sales(input$file$datapath) else d0
-    validate(need(!is.null(d), "Data tidak ditemukan. Letakkan Data_Penjualan.xlsx di folder aplikasi atau unggah file melalui panel kiri (kolom wajib: Branch, Customer type, Gender, Product line, Quantity, Total, Date, Time, Payment, Rating)."))
-    d
-  })
-  
-  # perbarui pilihan filter bila file baru diunggah
-  observeEvent(input$file, {
-    d <- data_raw()
-    updateCheckboxGroupInput(session, "f_branch", choices = levels(d$Branch), selected = levels(d$Branch), inline = TRUE)
-    updateCheckboxGroupInput(session, "f_cust", choices = levels(d$`Customer type`), selected = levels(d$`Customer type`), inline = TRUE)
-    updateCheckboxGroupInput(session, "f_gender", choices = levels(d$Gender), selected = levels(d$Gender), inline = TRUE)
-    updateCheckboxGroupInput(session, "f_pay", choices = levels(d$Payment), selected = levels(d$Payment))
-    updateSelectInput(session, "f_prod", choices = levels(d$`Product line`), selected = levels(d$`Product line`))
-    updateDateRangeInput(session, "f_date", start = min(d$Date), end = max(d$Date))
-  })
-  observeEvent(input$f_reset, {
-    d <- data_raw()
-    updateCheckboxGroupInput(session, "f_branch", selected = levels(d$Branch)); updateCheckboxGroupInput(session, "f_cust", selected = levels(d$`Customer type`))
-    updateCheckboxGroupInput(session, "f_gender", selected = levels(d$Gender)); updateCheckboxGroupInput(session, "f_pay", selected = levels(d$Payment))
-    updateSelectInput(session, "f_prod", selected = levels(d$`Product line`)); updateDateRangeInput(session, "f_date", start = min(d$Date), end = max(d$Date))
-  })
-  
-  data_use <- reactive({
-    d <- data_raw()
-    if (!is.null(input$f_branch)) d <- d[d$Branch %in% input$f_branch, ] else d <- d[0, ]
-    d <- d[d$`Customer type` %in% input$f_cust & d$Gender %in% input$f_gender & d$Payment %in% input$f_pay & d$`Product line` %in% input$f_prod, ]
-    if (!is.null(input$f_date)) d <- d[d$Date >= input$f_date[1] & d$Date <= input$f_date[2], ]
-    validate(need(nrow(d) >= 30, "Data hasil filter terlalu sedikit (kurang dari 30 baris). Longgarkan filter pada panel kiri."))
-    d <- droplevels(d); d
-  })
-  
-  output$n_info <- renderUI({
-    n0 <- nrow(data_raw()); n1 <- tryCatch(nrow(data_use()), error = function(e) 0)
-    div(class = "nfilter", "Transaksi terpilih:", br(), tags$b(format(n1, big.mark = ",")), paste0(" dari ", format(n0, big.mark = ","), " (", fmt(100 * n1 / n0, 1), "%)"))
-  })
-  
-  # ---- 1. DATA ----
-  output$data_info <- renderUI({
-    d <- data_raw()
-    bullets(c(sprintf("Jumlah observasi: **%s** transaksi; jumlah variabel: **10** variabel asli (ditambah 3 variabel turunan: Hour, Bulan, Hari).", format(nrow(d), big.mark = ",")),
-              sprintf("Periode data: **%s** sampai **%s**.", min(d$Date), max(d$Date)),
-              "Variabel kategorik: Branch, Customer type, Gender, Product line, Payment. Variabel numerik: Quantity, Total, Rating, serta Hour (turunan)."))
-  })
-  output$kamus <- renderTable(kamus, striped = TRUE, spacing = "s")
-  output$prep_info <- renderUI({
-    d <- data_raw(); q <- quantile(d$Total, c(.25, .75)); out <- sum(d$Total < q[1] - 1.5 * diff(q) | d$Total > q[2] + 1.5 * diff(q))
-    bullets(c(sprintf("**Data hilang:** %d sel kosong pada seluruh kolom analisis.", sum(is.na(d))),
-              sprintf("**Data ganda:** %d baris duplikat.", sum(duplicated(d))),
-              sprintf("**Pencilan:** terdapat %d pencilan pada Total (aturan 1.5 x IQR). Pencilan dipertahankan karena merupakan transaksi bernilai besar yang valid.", out),
-              "**Pengolahan:** variabel Hour, Bulan, dan Hari dibentuk dari Time dan Date; variabel kategorik diubah menjadi faktor.",
-              "**Transformasi:** tidak dilakukan pada eksplorasi; pada regresi tersedia pilihan transformasi ln(Y) untuk mengatasi ragam yang tidak konstan."))
-  })
-  output$preview <- renderTable({ x <- head(data_raw(), 10); x$Date <- as.character(x$Date); x }, striped = TRUE, spacing = "s")
-  
-  # ---- 2. UNIVARIAT ----
-  output$uni_type_ui <- renderUI(selectInput("uni_type", "Jenis grafik", uni_choices(input$uni_var)))
-  uni_type_val <- reactive({ chs <- uni_choices(input$uni_var); if (is.null(input$uni_type) || !(input$uni_type %in% chs)) chs[1] else input$uni_type })
-  output$uni_main <- renderUI(if (identical(uni_type_val(), "Stem-and-leaf")) verbatimTextOutput("uni_stem") else plotOutput("uni_plot", height = 380))
-  output$uni_plot <- renderPlot(plot_uni(data_use(), input$uni_var, uni_type_val()), res = 96)
-  output$uni_stem <- renderText({
-    x <- data_use()[[input$uni_var]]; req(is.numeric(x))
-    paste(c(paste("Stem-and-leaf plot:", input$uni_var), "", capture.output(stem(x))), collapse = "\n")
-  })
-  output$uni_table <- renderTable(uni_table(data_use(), input$uni_var), striped = TRUE, spacing = "s")
-  output$uni_interp <- renderUI(bullets(interp_uni(data_use(), input$uni_var)))
-  
-  # ---- 3. BIVARIAT ----
-  output$bi_type_ui <- renderUI(selectInput("bi_type", "Jenis grafik", bi_choices(input$bi_x, input$bi_y)))
-  bi_type_val <- reactive({ chs <- bi_choices(input$bi_x, input$bi_y); if (is.null(input$bi_type) || !(input$bi_type %in% chs)) chs[1] else input$bi_type })
-  output$bi_plot <- renderPlot({ validate(need(input$bi_x != input$bi_y, "Pilih dua variabel yang berbeda.")); plot_bi(data_use(), input$bi_x, input$bi_y, bi_type_val()) }, res = 96)
-  bi_res <- reactive({ validate(need(input$bi_x != input$bi_y, "Pilih dua variabel yang berbeda.")); bi_text(data_use(), input$bi_x, input$bi_y) })
-  output$bi_table <- renderTable(bi_res()$table, striped = TRUE, spacing = "s")
-  output$bi_interp <- renderUI(bullets(bi_res()$lines))
-  
-  # ---- 4. MULTIVARIAT ----
-  output$mv_scatter <- renderPlot({
-    validate(need(input$mv_x != input$mv_y, "Pilih sumbu X dan Y yang berbeda."))
-    plot_mv_scatter(data_use(), input$mv_x, input$mv_y, input$mv_col, input$mv_size, input$mv_facet, input$mv_lines)
-  }, res = 96)
-  output$mv_scatter_i <- renderUI({
-    d <- data_use(); x <- input$mv_x; y <- input$mv_y; col <- input$mv_col; r <- cor(d[[x]], d[[y]])
-    ln <- sprintf("Secara keseluruhan korelasi **%s** dan **%s** adalah **%s** (%s).", x, y, fmt(r, 3), strength(r))
-    if (col != NONE && !is.numeric(d[[col]])) {
-      g <- d %>% group_by(.data[[col]]) %>% summarise(r = cor(.data[[x]], .data[[y]]), .groups = "drop"); names(g)[1] <- "k"
-      ln <- c(ln, sprintf("Korelasi per **%s**: %s. %s", col, paste0(g$k, " = ", fmt(g$r, 2), collapse = "; "),
-                          if (diff(range(g$r)) < .1) "Pola hubungan hampir sama di semua kelompok sehingga variabel warna tidak mengubah hubungan X dan Y." else "Kekuatan hubungan berbeda antar kelompok, menandakan kemungkinan interaksi."))
-    }
-    if (input$mv_size != NONE) ln <- c(ln, sprintf("Ukuran titik menunjukkan **%s**; jika titik besar dan kecil tersebar acak, variabel tersebut tidak berkaitan dengan posisi titik pada X dan Y.", input$mv_size))
-    bullets(ln)
-  })
-  
-  output$mv_heat <- renderPlot({ validate(need(input$mv_ha != input$mv_hb, "Pilih dua variabel kategorik yang berbeda.")); plot_mv_heat(data_use(), input$mv_ha, input$mv_hb, input$mv_hn, input$mv_hf) }, res = 96)
-  output$mv_heat_i <- renderUI({
-    validate(need(input$mv_ha != input$mv_hb, "Pilih dua variabel kategorik yang berbeda."))
-    r <- mv_heat_data(data_use(), input$mv_ha, input$mv_hb, input$mv_hn, input$mv_hf); hi <- r[which.max(r$val), ]; lo <- r[which.min(r$val), ]
-    bullets(c(sprintf("Nilai tertinggi pada kombinasi **%s - %s** (%s) dan terendah pada **%s - %s** (%s).", hi$A, hi$B, fmt(hi$val, 1), lo$A, lo$B, fmt(lo$val, 1)),
-              sprintf("Selisih tertinggi-terendah sebesar **%s** (%s%% dari nilai tertinggi).", fmt(hi$val - lo$val, 1), fmt(100 * (hi$val - lo$val) / hi$val, 1)),
-              "Warna lebih pekat menandakan nilai lebih besar. Perbedaan antar sel perlu dikonfirmasi dengan uji statistik sebelum disimpulkan sebagai perbedaan nyata."))
-  })
-  
-  output$mv_cor <- renderPlot({ validate(need(length(input$mv_cv) >= 2, "Pilih minimal dua variabel.")); plot_mv_cor(data_use(), input$mv_cv, input$mv_cm) }, res = 96)
-  output$mv_cor_i <- renderUI({
-    validate(need(length(input$mv_cv) >= 2, "Pilih minimal dua variabel."))
-    m <- cor(data_use()[, input$mv_cv, drop = FALSE], method = input$mv_cm); m[lower.tri(m, diag = TRUE)] <- NA
-    df <- as.data.frame(as.table(m)); df <- df[!is.na(df$Freq), ]; df <- df[order(-abs(df$Freq)), ]
-    bullets(c(sprintf("Korelasi terkuat: **%s - %s** (r = %s; %s).", df$Var1[1], df$Var2[1], fmt(df$Freq[1], 3), strength(df$Freq[1])),
-              sprintf("Korelasi terlemah: **%s - %s** (r = %s).", df$Var1[nrow(df)], df$Var2[nrow(df)], fmt(df$Freq[nrow(df)], 3)),
-              "Warna merah muda tua = korelasi positif, biru keabuan = negatif, putih = mendekati nol."))
-  })
-  
-  output$mv_trend <- renderPlot(plot_mv_trend(data_use(), input$mv_tm, input$mv_tu, input$mv_tg), res = 96)
-  output$mv_trend_i <- renderUI({
-    td <- trend_data(data_use(), input$mv_tm, input$mv_tu, input$mv_tg); hi <- td[which.max(td$val), ]; lo <- td[which.min(td$val), ]
-    gtxt <- if (input$mv_tg != NONE) paste0(" (kelompok ", hi[[input$mv_tg]], ")") else ""
-    bullets(c(sprintf("Nilai **%s** tertinggi pada periode **%s**%s sebesar %s; terendah pada **%s** sebesar %s.", input$mv_tm, hi$Periode, gtxt, fmt(hi$val, 1), lo$Periode, fmt(lo$val, 1)),
-              "Bandingkan garis antar kelompok untuk melihat apakah pola naik-turun sama (pola serupa menandakan faktor waktu yang umum, bukan khas satu kelompok).",
-              if (input$mv_tu == "Mingguan") "Minggu pertama dan terakhir dapat berisi lebih sedikit hari sehingga nilainya tampak lebih rendah." else "Perhatikan bahwa data hanya mencakup beberapa bulan, sehingga pola musiman tidak dapat disimpulkan."))
-  })
-  
-  output$mv_pca <- renderPlot({ validate(need(length(input$mv_pv) >= 3, "Pilih minimal tiga variabel numerik.")); plot_mv_pca(data_use(), input$mv_pv, input$mv_pc) }, res = 96)
-  output$mv_pca_t <- renderTable({
-    validate(need(length(input$mv_pv) >= 3, "Pilih minimal tiga variabel numerik."))
-    pr <- pca_fit(data_use(), input$mv_pv); ve <- 100 * pr$sdev^2 / sum(pr$sdev^2)
-    ld <- round(pr$rotation[, 1:2], 3); data.frame(Variabel = rownames(ld), PC1 = ld[, 1], PC2 = ld[, 2], check.names = FALSE) %>%
-      rbind(data.frame(Variabel = "Keragaman dijelaskan (%)", PC1 = round(ve[1], 1), PC2 = round(ve[2], 1)))
-  }, striped = TRUE, spacing = "s")
-  output$mv_pca_i <- renderUI({
-    validate(need(length(input$mv_pv) >= 3, "Pilih minimal tiga variabel numerik."))
-    pr <- pca_fit(data_use(), input$mv_pv); ve <- 100 * pr$sdev^2 / sum(pr$sdev^2); l1 <- pr$rotation[, 1]
-    bullets(c(sprintf("PC1 menjelaskan **%s%%** dan PC2 **%s%%** keragaman; bersama-sama **%s%%**.", fmt(ve[1], 1), fmt(ve[2], 1), fmt(ve[1] + ve[2], 1)),
-              sprintf("Variabel dengan kontribusi terbesar pada PC1: **%s** (loading %s).", names(which.max(abs(l1))), fmt(l1[which.max(abs(l1))], 2)),
-              "Panah yang searah menandakan variabel berkorelasi positif; panah yang saling tegak lurus menandakan variabel hampir tidak berkorelasi. Jika keragaman terbagi merata ke banyak komponen, variabel-variabel tersebut membawa informasi yang berbeda-beda."))
-  })
-  
-  # ---- 4b. SCATTERPLOT MATRIX, MAHALANOBIS, Q-Q CHI-SQUARE ----
-  output$mv_pairs <- renderPlot({ validate(need(length(input$mv_mvars) >= 2, "Pilih minimal dua variabel numerik.")); plot_mv_pairs(data_use(), input$mv_mvars, input$mv_mcol) }, res = 96)
-  output$mv_pairs_i <- renderUI({
-    validate(need(length(input$mv_mvars) >= 2, "Pilih minimal dua variabel numerik."))
-    m <- cor(data_use()[, input$mv_mvars, drop = FALSE]); m[lower.tri(m, diag = TRUE)] <- NA
-    df <- as.data.frame(as.table(m)); df <- df[!is.na(df$Freq), ]; df <- df[order(-abs(df$Freq)), ]
-    bullets(c("Diagonal: histogram tiap variabel; segitiga bawah: scatterplot dengan kurva lowess; segitiga atas: koefisien korelasi Pearson (semakin besar angka, semakin kuat hubungan).",
-              sprintf("Pasangan dengan hubungan terkuat: **%s - %s** (r = %s; %s). Pasangan terlemah: **%s - %s** (r = %s).", df$Var1[1], df$Var2[1], fmt(df$Freq[1], 3), strength(df$Freq[1]), df$Var1[nrow(df)], df$Var2[nrow(df)], fmt(df$Freq[nrow(df)], 3)),
-              "Kurva lowess yang mendekati garis lurus menandakan hubungan linear; kurva melengkung menandakan hubungan nonlinear. Titik yang jauh dari kumpulan utama adalah kandidat pencilan."))
-  })
-  
-  mh <- reactive({ validate(need(length(input$mv_dvars) >= 2, "Pilih minimal dua variabel numerik.")); mahal_fit(data_use(), input$mv_dvars) })
-  output$mv_mh1 <- renderPlot(plot_mv_mahal_idx(mh()), res = 96)
-  output$mv_mh2 <- renderPlot(plot_mv_mahal_sc(mh(), input$mv_dvars), res = 96)
-  output$mv_mh_t <- renderTable(mahal_table(data_use(), mh(), input$mv_dvars), striped = TRUE, spacing = "s")
-  output$mv_mh_i <- renderUI({
-    f <- mh(); d <- data_use(); vars <- input$mv_dvars; n <- nrow(f$df); k <- sum(f$df$out); top <- f$df[which.max(f$df$D2), ]
-    z <- vapply(vars, function(v) (d[[v]][top$idx] - mean(d[[v]])) / sd(d[[v]]), 0); vmax <- names(z)[which.max(abs(z))]
-    bullets(c(sprintf("Batas pencilan multivariat: Chi-Square 97.5%% dengan df = %d, yaitu **%s**. Observasi dengan D2 di atas batas dianggap pencilan.", f$p, fmt(f$cut, 2)),
-              sprintf("Ditemukan **%d pencilan** (**%s%%** dari %d observasi). Pada data normal multivariat, proporsi yang diharapkan sekitar 2.5%%.", k, fmt(100 * k / n, 1), n),
-              sprintf("Observasi paling ekstrem: baris **%d** (D2 = %s). Variabel yang paling menyimpang: **%s** (z = %s).", top$idx, fmt(top$D2, 2), vmax, fmt(z[vmax], 2)),
-              "Pencilan multivariat dapat berupa kombinasi nilai yang tidak lazim walau tiap variabel tampak wajar. Pencilan sebaiknya diperiksa dulu keabsahannya sebelum dihapus."))
-  })
-  
-  qq <- reactive({ validate(need(length(input$mv_qvars) >= 2, "Pilih minimal dua variabel numerik.")); mahal_fit(data_use(), input$mv_qvars) })
-  output$mv_qq <- renderPlot(plot_mv_qqchi(qq()), res = 96)
-  output$mv_qq_i <- renderUI({
-    f <- qq(); n <- nrow(f$df); s <- sort(f$df$D2); q <- qchisq((seq_len(n) - .5) / n, df = f$p); r <- cor(s, q)
-    bullets(c(sprintf("Korelasi antara D2 terurut dan kuantil Chi-Square = **%s**; semakin mendekati 1, semakin sesuai data dengan normal multivariat.", fmt(r, 3)),
-              sprintf("Titik terjauh dari garis berada di ujung kanan (baris %s), yang menandakan observasi dengan jarak Mahalanobis besar.", paste(tail(f$df$idx[order(f$df$D2)], 3), collapse = ", ")),
-              "Titik yang melengkung ke atas di ujung kanan menandakan ekor distribusi lebih berat atau adanya pencilan; pola berundak dapat muncul karena variabel diskret (Quantity, Hour). Asumsi normalitas multivariat dianggap kurang terpenuhi bila penyimpangan jelas."))
-  })
-  
-  # ---- 5. REGRESI ----
-  logy <- reactive(identical(input$rg_log, "yes"))
-  model <- eventReactive(input$rg_go, {
-    preds <- setdiff(input$rg_x, input$rg_y)
-    validate(need(length(preds) >= 2, "Pilih minimal dua variabel prediktor (selain variabel respons)."))
-    d <- data_use(); if (logy()) validate(need(all(d[[input$rg_y]] > 0), "Transformasi ln hanya untuk respons bernilai positif."))
-    list(m = build_model(d, input$rg_y, preds, logy()), resp = input$rg_y, logy = logy(), preds = preds, d = d)
-  }, ignoreNULL = FALSE)
-  M <- reactive(model()$m)
-  
-  output$rg_eq <- renderText(make_equation(M(), model()$resp, model()$logy))
-  output$rg_fit <- renderTable(fit_table(M()), striped = TRUE, spacing = "s")
-  output$rg_anova <- renderTable(anova_table(M()), striped = TRUE, spacing = "s")
-  output$rg_coef <- renderTable(coef_table(M()), striped = TRUE, spacing = "s")
-  output$rg_interp <- renderUI(bullets(interp_reg(M(), model()$resp, model()$logy)))
-  output$rg_p1 <- renderPlot(plot_reg_avp(M(), model()$logy, model()$resp), res = 96)
-  output$rg_p2 <- renderPlot(plot_reg_coef(M()), res = 96)
-  output$rg_vis_i <- renderUI({
-    m <- M(); r2 <- summary(m)$r.squared
-    bullets(c(sprintf("**Aktual vs prediksi:** semakin rapat titik di sekitar garis putus-putus, semakin baik prediksi model (R2 = %s). Titik yang menyebar lebar menunjukkan keragaman yang belum dijelaskan model.", fmt(r2, 3)),
-              "**Koefisien dan selang kepercayaan:** titik = estimasi, garis = selang 95%. Selang yang tidak memotong garis nol (warna tua) menandakan prediktor signifikan pada taraf 5%. Skala koefisien bergantung pada satuan variabelnya, jadi bandingkan terutama ada-tidaknya pengaruh, bukan panjang garisnya."))
-  })
-  output$rg_d1 <- renderPlot(plot_reg_resid(M()), res = 96)
-  output$rg_d2 <- renderPlot(plot_reg_qq(M()), res = 96)
-  output$rg_d3 <- renderPlot(plot_reg_scale(M()), res = 96)
-  output$rg_d4 <- renderPlot(plot_reg_cook(M()), res = 96)
-  output$rg_tests <- renderTable({
-    m <- M(); e <- resid(m); sh <- shapiro.test(if (length(e) > 5000) sample(e, 5000) else e); bp <- bp_test(m); cd <- cooks.distance(m)
-    data.frame(Uji = c("Shapiro-Wilk (normalitas residual)", "Breusch-Pagan (kesamaan ragam)", "Observasi berpengaruh (Cook's D > 4/n)"),
-               Statistik = c(fmt(unname(sh$statistic), 4), fmt(unname(bp["stat"]), 3), as.character(sum(cd > 4 / length(cd)))),
-               `p-value` = c(fmt_p(sh$p.value), fmt_p(unname(bp["p"])), "-"),
-               Keputusan = c(if (sh$p.value < .05) "Tidak normal" else "Normal", if (bp["p"] < .05) "Ragam tidak konstan" else "Ragam konstan", paste(sum(cd > 4 / length(cd)), "observasi")), check.names = FALSE)
-  }, striped = TRUE, spacing = "s")
-  output$rg_vif <- renderTable({ v <- vif_table(M()); validate(need(!is.null(v), "VIF membutuhkan minimal dua prediktor.")); v$`VIF setara` <- fmt(v$`VIF setara`, 3); v$Keputusan <- ifelse(as.numeric(v$`VIF setara`) < 5, "Aman", "Perlu perhatian"); v }, striped = TRUE, spacing = "s")
-  
-  # ---- 5b. GALERI VISUALISASI REGRESI ----
-  output$rv1 <- renderPlot(plot_reg_scatter(model()$d, model()$resp, model()$preds, model()$logy), res = 96)
-  output$rv2 <- renderPlot(plot_reg_cor(model()$d, model()$resp, model()$preds), res = 96)
-  output$rv3 <- renderPlot(plot_reg_coef(M()), res = 96)
-  output$rv4 <- renderPlot(plot_reg_qq(M()), res = 96)
-  output$rv5 <- renderPlot(plot_reg_hist(M()), res = 96)
-  output$rv6 <- renderPlot(plot_reg_ts(M(), model()$d), res = 96)
-  output$rv7 <- renderPlot(plot_reg_acf(M(), model()$d), res = 96)
-  output$rv8 <- renderPlot(plot_reg_obsres(M()), res = 96)
-  output$rv_i <- renderUI({
-    m <- M(); o <- reg_ord_res(m, model()$d); e <- o$res; n <- length(e)
-    a <- acf(e, lag.max = min(30, n - 1), plot = FALSE); ci <- qnorm(.975) / sqrt(n); nsig <- sum(abs(as.numeric(a$acf)[-1]) > ci)
-    dw <- sum(diff(e)^2) / sum(e^2); sw <- shapiro.test(if (n > 5000) sample(e, 5000) else e)$p.value
-    bullets(c("**Scatterplot:** menunjukkan bentuk hubungan respons dengan tiap prediktor numerik; garis yang jelas menanjak/menurun menandakan hubungan linear.",
-              "**Correlation matrix:** korelasi respons dengan prediktor menunjukkan kandidat prediktor kuat; korelasi tinggi antar prediktor mengindikasikan potensi multikolinearitas.",
-              "**Coefficient CI plot:** selang 95% yang tidak memotong garis nol berarti koefisien signifikan pada taraf 5%.",
-              sprintf("**Normal probability plot dan histogram residual:** titik mengikuti garis dan histogram mendekati kurva normal berarti residual normal. Hasil Shapiro-Wilk p %s, sehingga residual %s.", pq(sw), if (sw < .05) "**tidak normal**" else "normal"),
-              sprintf("**Time series plot dan ACF:** statistik Durbin-Watson = %s (sekitar 2 berarti tidak ada autokorelasi); %d dari %d lag berada di luar batas 95%%. %s", fmt(dw, 3), nsig, length(a$acf) - 1,
-                      if (nsig <= 0.05 * (length(a$acf) - 1) + 1 && abs(dw - 2) < .4) "Tidak ada indikasi autokorelasi residual yang berarti." else "Terdapat indikasi autokorelasi residual; periksa pola waktu."),
-              "**Observed vs residual:** residual idealnya tersebar acak di sekitar nol. Sebaran yang melebar pada nilai observasi besar menandakan ragam residual tidak konstan (heteroskedastis)."))
-  })
-  
-  # ---- 6. KESIMPULAN ----
-  output$kes_auto <- renderUI(bullets(auto_conclusion(data_use(), M(), model()$resp, model()$logy)))
-}
+# ============================================================
+# SERVER / LOGIKA APLIKASI STREAMLIT
+# ============================================================
 
-shinyApp(ui, server)
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+from scipy import stats
+from statsmodels.tsa.stattools import acf
+
+
+# ============================================================
+# 1. MEMBACA DATA
+# ============================================================
+
+@st.cache_data
+def load_sales_data(file):
+    if file is None:
+        try:
+            return read_sales(DATA_FILE)
+        except Exception:
+            return None
+
+    try:
+        return read_sales(file)
+    except Exception:
+        return None
+
+
+if uploaded_file is not None:
+    data_raw = load_sales_data(uploaded_file)
+else:
+    data_raw = d0
+
+
+if data_raw is None:
+    st.error(
+        "Data tidak ditemukan. Letakkan Data_Penjualan.xlsx "
+        "di folder aplikasi atau unggah file melalui panel kiri. "
+        "Kolom wajib: Branch, Customer type, Gender, Product line, "
+        "Quantity, Total, Date, Time, Payment, Rating."
+    )
+    st.stop()
+
+
+# ============================================================
+# 2. MEMPERBARUI PILIHAN FILTER
+# ============================================================
+
+def get_levels(data, column):
+    if column not in data.columns:
+        return []
+
+    if isinstance(data[column].dtype, pd.CategoricalDtype):
+        return data[column].cat.categories.tolist()
+
+    return sorted(data[column].dropna().unique().tolist(), key=str)
+
+
+branch_levels = get_levels(data_raw, "Branch")
+cust_levels = get_levels(data_raw, "Customer type")
+gender_levels = get_levels(data_raw, "Gender")
+pay_levels = get_levels(data_raw, "Payment")
+prod_levels = get_levels(data_raw, "Product line")
+
+
+# ============================================================
+# 3. RESET FILTER
+# ============================================================
+
+if "reset_filter" not in st.session_state:
+    st.session_state["reset_filter"] = False
+
+if st.sidebar.button("Atur ulang filter"):
+    st.session_state["reset_filter"] = True
+    st.rerun()
+
+
+# ============================================================
+# 4. MENGATUR FILTER DATA
+# ============================================================
+
+def filter_options(key, levels):
+    if st.session_state.get("reset_filter", False):
+        return levels
+
+    current = st.session_state.get(key)
+
+    if current is None:
+        return levels
+
+    return [x for x in current if x in levels]
+
+
+f_branch = filter_options("f_branch", branch_levels)
+f_cust = filter_options("f_cust", cust_levels)
+f_gender = filter_options("f_gender", gender_levels)
+f_pay = filter_options("f_pay", pay_levels)
+f_prod = filter_options("f_prod", prod_levels)
+
+if "Date" in data_raw.columns:
+    date_min = pd.to_datetime(data_raw["Date"]).min().date()
+    date_max = pd.to_datetime(data_raw["Date"]).max().date()
+else:
+    date_min = None
+    date_max = None
+
+
+# Mengambil filter dari sidebar
+with st.sidebar:
+
+    st.markdown("### Filter data")
+
+    f_branch = st.multiselect(
+        "Branch",
+        options=branch_levels,
+        default=f_branch,
+        key="filter_branch"
+    )
+
+    f_cust = st.multiselect(
+        "Customer type",
+        options=cust_levels,
+        default=f_cust,
+        key="filter_customer"
+    )
+
+    f_gender = st.multiselect(
+        "Gender",
+        options=gender_levels,
+        default=f_gender,
+        key="filter_gender"
+    )
+
+    f_pay = st.multiselect(
+        "Payment",
+        options=pay_levels,
+        default=f_pay,
+        key="filter_payment"
+    )
+
+    f_prod = st.multiselect(
+        "Product line",
+        options=prod_levels,
+        default=f_prod,
+        key="filter_product"
+    )
+
+    if date_min is not None:
+        f_date = st.date_input(
+            "Rentang tanggal",
+            value=(date_min, date_max),
+            min_value=date_min,
+            max_value=date_max,
+            format="DD-MM-YYYY"
+        )
+    else:
+        f_date = None
+
+
+st.session_state["reset_filter"] = False
+
+
+# ============================================================
+# 5. DATA SETELAH FILTER
+# ============================================================
+
+def apply_filters(
+    data,
+    branch,
+    customer,
+    gender,
+    payment,
+    product,
+    date_range
+):
+    result = data.copy()
+
+    result = result[
+        result["Branch"].isin(branch)
+        & result["Customer type"].isin(customer)
+        & result["Gender"].isin(gender)
+        & result["Payment"].isin(payment)
+        & result["Product line"].isin(product)
+    ]
+
+    if date_range is not None and len(date_range) == 2:
+        result["Date"] = pd.to_datetime(result["Date"])
+
+        result = result[
+            (result["Date"].dt.date >= date_range[0])
+            & (result["Date"].dt.date <= date_range[1])
+        ]
+
+    return result.reset_index(drop=True)
+
+
+data_use = apply_filters(
+    data_raw,
+    f_branch,
+    f_cust,
+    f_gender,
+    f_pay,
+    f_prod,
+    f_date
+)
+
+
+# Validasi jumlah data
+if len(data_use) < 30:
+    st.error(
+        "Data hasil filter terlalu sedikit (kurang dari 30 baris). "
+        "Longgarkan filter pada panel kiri."
+    )
+    st.stop()
+
+
+data_use = data_use.copy()
+
+
+# ============================================================
+# 6. INFORMASI JUMLAH DATA TERPILIH
+# ============================================================
+
+n0 = len(data_raw)
+n1 = len(data_use)
+
+percentage = 100 * n1 / n0 if n0 > 0 else 0
+
+st.sidebar.markdown("---")
+
+st.sidebar.markdown(
+    f"""
+    <div class="nfilter">
+        Transaksi terpilih:<br>
+        <b>{n1:,}</b> dari {n0:,}
+        ({percentage:.1f}%)
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# 7. TAB 1: MASALAH DAN DATA
+# ============================================================
+
+with tabs[0]:
+
+    st.markdown("### Informasi data")
+
+    period_start = pd.to_datetime(data_raw["Date"]).min()
+    period_end = pd.to_datetime(data_raw["Date"]).max()
+
+    data_info = [
+        (
+            f"Jumlah observasi: **{n0:,}** transaksi; "
+            "jumlah variabel: **10** variabel asli "
+            "(ditambah 3 variabel turunan: Hour, Bulan, Hari)."
+        ),
+        (
+            f"Periode data: **{period_start:%d-%m-%Y}** "
+            f"sampai **{period_end:%d-%m-%Y}**."
+        ),
+        (
+            "Variabel kategorik: Branch, Customer type, Gender, "
+            "Product line, Payment. Variabel numerik: Quantity, "
+            "Total, Rating, serta Hour (turunan)."
+        )
+    ]
+
+    show_interpretation(data_info)
+
+    st.markdown("### Definisi variabel")
+
+    show_table(kamus)
+
+    st.markdown("### Pengolahan data")
+
+    q = data_raw["Total"].quantile([0.25, 0.75])
+    iqr = q.loc[0.75] - q.loc[0.25]
+
+    lower = q.loc[0.25] - 1.5 * iqr
+    upper = q.loc[0.75] + 1.5 * iqr
+
+    outliers = (
+        (data_raw["Total"] < lower)
+        | (data_raw["Total"] > upper)
+    ).sum()
+
+    missing = int(data_raw.isna().sum().sum())
+    duplicates = int(data_raw.duplicated().sum())
+
+    prep_info = [
+        f"**Data hilang:** {missing} sel kosong pada seluruh kolom analisis.",
+        f"**Data ganda:** {duplicates} baris duplikat.",
+        (
+            f"**Pencilan:** terdapat {outliers} pencilan pada Total "
+            "(aturan 1.5 x IQR). Pencilan dipertahankan karena merupakan "
+            "transaksi bernilai besar yang valid."
+        ),
+        (
+            "**Pengolahan:** variabel Hour, Bulan, dan Hari dibentuk "
+            "dari Time dan Date; variabel kategorik diubah menjadi faktor."
+        ),
+        (
+            "**Transformasi:** tidak dilakukan pada eksplorasi; pada "
+            "regresi tersedia pilihan transformasi ln(Y) untuk mengatasi "
+            "ragam yang tidak konstan."
+        )
+    ]
+
+    show_interpretation(prep_info)
+
+    st.markdown("### Cuplikan data")
+
+    preview = data_raw.head(10).copy()
+    preview["Date"] = preview["Date"].astype(str)
+
+    show_table(preview)
+
+
+# ============================================================
+# 8. TAB 2: UNIVARIAT
+# ============================================================
+
+with tabs[1]:
+
+    uni_type = uni_choices(uni_var)
+
+    if uni_var not in data_use.columns:
+        st.warning("Variabel tidak tersedia.")
+    else:
+
+        if "uni_type_selected" not in st.session_state:
+            st.session_state["uni_type_selected"] = uni_type[0]
+
+        selected_type = st.selectbox(
+            "Jenis grafik",
+            options=uni_type,
+            key="uni_type_selected"
+        )
+
+        if selected_type == "Stem-and-leaf":
+
+            x = data_use[uni_var]
+
+            if pd.api.types.is_numeric_dtype(x):
+                st.text("Stem-and-leaf plot: " + uni_var)
+
+                values = x.dropna().to_numpy()
+
+                if len(values) > 0:
+                    stem_values = np.floor(values / 10).astype(int)
+                    leaf_values = np.abs(values.astype(int)) % 10
+
+                    stem_df = pd.DataFrame({
+                        "Stem": stem_values,
+                        "Leaf": leaf_values
+                    })
+
+                    for stem, group in stem_df.groupby("Stem"):
+                        leaves = " ".join(
+                            map(str, sorted(group["Leaf"].tolist()))
+                        )
+                        st.text(f"{stem} | {leaves}")
+
+            else:
+                st.warning(
+                    "Stem-and-leaf hanya dapat digunakan "
+                    "untuk variabel numerik."
+                )
+
+        else:
+
+            st.markdown("### Visualisasi")
+
+            fig = plot_uni(
+                data_use,
+                uni_var,
+                selected_type
+            )
+
+            show_plot(fig)
+
+        col1, col2 = st.columns([7, 5])
+
+        with col2:
+            st.markdown("### Statistik deskriptif")
+            show_table(uni_table(data_use, uni_var))
+
+        st.markdown("### Interpretasi")
+
+        show_interpretation(
+            interp_uni(data_use, uni_var)
+        )
+
+
+# ============================================================
+# 9. TAB 3: BIVARIAT
+# ============================================================
+
+with tabs[2]:
+
+    if bi_x == bi_y:
+
+        st.warning("Pilih dua variabel yang berbeda.")
+
+    else:
+
+        selected_bi_type = bi_choices(bi_x, bi_y)
+
+        bi_type_selected = st.selectbox(
+            "Jenis grafik",
+            options=selected_bi_type,
+            key="bi_type_selected"
+        )
+
+        st.markdown("### Visualisasi")
+
+        fig = plot_bi(
+            data_use,
+            bi_x,
+            bi_y,
+            bi_type_selected
+        )
+
+        show_plot(fig)
+
+        bi_res = bi_text(
+            data_use,
+            bi_x,
+            bi_y
+        )
+
+        col1, col2 = st.columns([7, 5])
+
+        with col2:
+            st.markdown("### Ringkasan dan uji")
+            show_table(bi_res["table"])
+
+        st.markdown("### Interpretasi")
+
+        show_interpretation(bi_res["lines"])
+
+
+# ============================================================
+# 10. TAB 4: MULTIVARIAT
+# ============================================================
+
+with tabs[3]:
+
+    # --------------------------------------------------------
+    # 10.1 SCATTER MULTIVARIAT
+    # --------------------------------------------------------
+
+    with mv_tabs[0]:
+
+        if mv_x == mv_y:
+
+            st.warning("Pilih sumbu X dan Y yang berbeda.")
+
+        else:
+
+            fig = plot_mv_scatter(
+                data_use,
+                mv_x,
+                mv_y,
+                mv_col,
+                mv_size,
+                mv_facet,
+                mv_lines
+            )
+
+            show_plot(fig)
+
+            d_mv = data_use
+            r = d_mv[mv_x].corr(d_mv[mv_y])
+
+            ln = [
+                (
+                    f"Secara keseluruhan korelasi **{mv_x}** dan "
+                    f"**{mv_y}** adalah **{fmt(r, 3)}** "
+                    f"({strength(r)})."
+                )
+            ]
+
+            if (
+                mv_col != NONE
+                and mv_col in d_mv.columns
+                and not pd.api.types.is_numeric_dtype(d_mv[mv_col])
+            ):
+
+                grouped = (
+                    d_mv.groupby(mv_col, observed=False)
+                    .apply(
+                        lambda g: g[mv_x].corr(g[mv_y]),
+                        include_groups=False
+                    )
+                    .dropna()
+                )
+
+                group_text = "; ".join(
+                    f"{k} = {fmt(v, 2)}"
+                    for k, v in grouped.items()
+                )
+
+                ln.append(
+                    f"Korelasi per **{mv_col}**: {group_text}."
+                )
+
+                if len(grouped) > 1:
+
+                    if grouped.max() - grouped.min() < 0.1:
+                        ln.append(
+                            "Pola hubungan hampir sama di semua kelompok "
+                            "sehingga variabel warna tidak mengubah "
+                            "hubungan X dan Y."
+                        )
+                    else:
+                        ln.append(
+                            "Kekuatan hubungan berbeda antar kelompok, "
+                            "menandakan kemungkinan interaksi."
+                        )
+
+            if mv_size != NONE:
+                ln.append(
+                    f"Ukuran titik menunjukkan **{mv_size}**; "
+                    "jika titik besar dan kecil tersebar acak, "
+                    "variabel tersebut tidak berkaitan dengan "
+                    "posisi titik pada X dan Y."
+                )
+
+            show_interpretation(ln)
+
+
+    # --------------------------------------------------------
+    # 10.2 HEATMAP RATA-RATA
+    # --------------------------------------------------------
+
+    with mv_tabs[1]:
+
+        if mv_ha == mv_hb:
+
+            st.warning(
+                "Pilih dua variabel kategorik yang berbeda."
+            )
+
+        else:
+
+            fig = plot_mv_heat(
+                data_use,
+                mv_ha,
+                mv_hb,
+                mv_hn,
+                mv_hf
+            )
+
+            show_plot(fig)
+
+            result = mv_heat_data(
+                data_use,
+                mv_ha,
+                mv_hb,
+                mv_hn,
+                mv_hf
+            )
+
+            hi = result.loc[result["val"].idxmax()]
+            lo = result.loc[result["val"].idxmin()]
+
+            difference = hi["val"] - lo["val"]
+
+            percentage = (
+                100 * difference / hi["val"]
+                if hi["val"] != 0 else np.nan
+            )
+
+            show_interpretation([
+                (
+                    f"Nilai tertinggi pada kombinasi "
+                    f"**{hi['A']} - {hi['B']}** "
+                    f"({fmt(hi['val'], 1)}) dan terendah pada "
+                    f"**{lo['A']} - {lo['B']}** "
+                    f"({fmt(lo['val'], 1)})."
+                ),
+                (
+                    f"Selisih tertinggi-terendah sebesar "
+                    f"**{fmt(difference, 1)}** "
+                    f"({fmt(percentage, 1)}% dari nilai tertinggi)."
+                ),
+                (
+                    "Warna lebih pekat menandakan nilai lebih besar. "
+                    "Perbedaan antar sel perlu dikonfirmasi dengan "
+                    "uji statistik sebelum disimpulkan sebagai "
+                    "perbedaan nyata."
+                )
+            ])
+
+
+    # --------------------------------------------------------
+    # 10.3 MATRIKS KORELASI
+    # --------------------------------------------------------
+
+    with mv_tabs[2]:
+
+        if len(mv_cv) < 2:
+
+            st.warning("Pilih minimal dua variabel.")
+
+        else:
+
+            fig = plot_mv_cor(
+                data_use,
+                mv_cv,
+                mv_cm
+            )
+
+            show_plot(fig)
+
+            corr = data_use[mv_cv].corr(method=mv_cm)
+
+            upper = corr.where(
+                np.triu(
+                    np.ones(corr.shape),
+                    k=1
+                ).astype(bool)
+            )
+
+            corr_pairs = (
+                upper.stack()
+                .rename("Freq")
+                .reset_index()
+            )
+
+            corr_pairs.columns = [
+                "Var1", "Var2", "Freq"
+            ]
+
+            corr_pairs["abs"] = corr_pairs["Freq"].abs()
+
+            corr_pairs = corr_pairs.sort_values(
+                "abs",
+                ascending=False
+            )
+
+            if len(corr_pairs) > 0:
+
+                strongest = corr_pairs.iloc[0]
+                weakest = corr_pairs.iloc[-1]
+
+                show_interpretation([
+                    (
+                        f"Korelasi terkuat: **{strongest['Var1']} - "
+                        f"{strongest['Var2']}** "
+                        f"(r = {fmt(strongest['Freq'], 3)}; "
+                        f"{strength(strongest['Freq'])})."
+                    ),
+                    (
+                        f"Korelasi terlemah: **{weakest['Var1']} - "
+                        f"{weakest['Var2']}** "
+                        f"(r = {fmt(weakest['Freq'], 3)})."
+                    ),
+                    (
+                        "Warna merah muda tua = korelasi positif, "
+                        "biru keabuan = negatif, putih = mendekati nol."
+                    )
+                ])
+
+
+    # --------------------------------------------------------
+    # 10.4 TREN WAKTU
+    # --------------------------------------------------------
+
+    with mv_tabs[3]:
+
+        fig = plot_mv_trend(
+            data_use,
+            mv_tm,
+            mv_tu,
+            mv_tg
+        )
+
+        show_plot(fig)
+
+        td = trend_data(
+            data_use,
+            mv_tm,
+            mv_tu,
+            mv_tg
+        )
+
+        if len(td) > 0:
+
+            hi = td.loc[td["val"].idxmax()]
+            lo = td.loc[td["val"].idxmin()]
+
+            group_text = ""
+
+            if mv_tg != NONE:
+                group_text = (
+                    f" (kelompok {hi[mv_tg]})"
+                )
+
+            trend_lines = [
+                (
+                    f"Nilai **{mv_tm}** tertinggi pada periode "
+                    f"**{hi['Periode']}**{group_text} sebesar "
+                    f"{fmt(hi['val'], 1)}; terendah pada "
+                    f"**{lo['Periode']}** sebesar "
+                    f"{fmt(lo['val'], 1)}."
+                ),
+                (
+                    "Bandingkan garis antar kelompok untuk melihat "
+                    "apakah pola naik-turun sama."
+                )
+            ]
+
+            if mv_tu == "Mingguan":
+                trend_lines.append(
+                    "Minggu pertama dan terakhir dapat berisi "
+                    "lebih sedikit hari sehingga nilainya "
+                    "tampak lebih rendah."
+                )
+            else:
+                trend_lines.append(
+                    "Data hanya mencakup beberapa bulan, sehingga "
+                    "pola musiman tidak dapat disimpulkan."
+                )
+
+            show_interpretation(trend_lines)
+
+
+    # --------------------------------------------------------
+    # 10.5 PCA
+    # --------------------------------------------------------
+
+    with mv_tabs[4]:
+
+        if len(mv_pv) < 3:
+
+            st.warning(
+                "Pilih minimal tiga variabel numerik."
+            )
+
+        else:
+
+            fig = plot_mv_pca(
+                data_use,
+                mv_pv,
+                mv_pc
+            )
+
+            show_plot(fig)
+
+            pr = pca_fit(
+                data_use,
+                mv_pv
+            )
+
+            ve = (
+                100 * pr.sdev ** 2
+                / np.sum(pr.sdev ** 2)
+            )
+
+            loadings = pd.DataFrame(
+                pr.rotation[:, :2],
+                index=mv_pv,
+                columns=["PC1", "PC2"]
+            ).round(3)
+
+            loading_table = loadings.reset_index()
+            loading_table.columns = [
+                "Variabel", "PC1", "PC2"
+            ]
+
+            st.markdown("### Keragaman dan loading")
+            show_table(loading_table)
+
+            l1 = pr.rotation[:, 0]
+            max_index = np.argmax(np.abs(l1))
+
+            show_interpretation([
+                (
+                    f"PC1 menjelaskan **{fmt(ve[0], 1)}%** "
+                    f"dan PC2 **{fmt(ve[1], 1)}%** keragaman; "
+                    f"bersama-sama **{fmt(ve[0] + ve[1], 1)}%**."
+                ),
+                (
+                    f"Variabel dengan kontribusi terbesar pada PC1: "
+                    f"**{mv_pv[max_index]}** "
+                    f"(loading {fmt(l1[max_index], 2)})."
+                ),
+                (
+                    "Panah yang searah menandakan variabel berkorelasi "
+                    "positif; panah yang saling tegak lurus menandakan "
+                    "variabel hampir tidak berkorelasi."
+                )
+            ])
+
+
+    # --------------------------------------------------------
+    # 10.6 SCATTERPLOT MATRIX
+    # --------------------------------------------------------
+
+    with mv_tabs[5]:
+
+        if len(mv_mvars) < 2:
+
+            st.warning(
+                "Pilih minimal dua variabel numerik."
+            )
+
+        else:
+
+            fig = plot_mv_pairs(
+                data_use,
+                mv_mvars,
+                mv_mcol
+            )
+
+            show_plot(fig)
+
+            corr = data_use[mv_mvars].corr()
+
+            upper = corr.where(
+                np.triu(
+                    np.ones(corr.shape),
+                    k=1
+                ).astype(bool)
+            )
+
+            pairs = (
+                upper.stack()
+                .rename("Freq")
+                .reset_index()
+            )
+
+            pairs.columns = [
+                "Var1", "Var2", "Freq"
+            ]
+
+            pairs["abs"] = pairs["Freq"].abs()
+            pairs = pairs.sort_values(
+                "abs",
+                ascending=False
+            )
+
+            if len(pairs) > 0:
+
+                strongest = pairs.iloc[0]
+                weakest = pairs.iloc[-1]
+
+                show_interpretation([
+                    (
+                        "Diagonal: histogram tiap variabel; "
+                        "segitiga bawah: scatterplot dengan kurva "
+                        "lowess; segitiga atas: koefisien korelasi "
+                        "Pearson."
+                    ),
+                    (
+                        f"Pasangan dengan hubungan terkuat: "
+                        f"**{strongest['Var1']} - {strongest['Var2']}** "
+                        f"(r = {fmt(strongest['Freq'], 3)}; "
+                        f"{strength(strongest['Freq'])}). "
+                        f"Pasangan terlemah: **{weakest['Var1']} - "
+                        f"{weakest['Var2']}** "
+                        f"(r = {fmt(weakest['Freq'], 3)})."
+                    ),
+                    (
+                        "Kurva lowess yang mendekati garis lurus "
+                        "menandakan hubungan linear; kurva melengkung "
+                        "menandakan hubungan nonlinear."
+                    )
+                ])
+
+
+    # --------------------------------------------------------
+    # 10.7 PENENCILAN MAHALANOBIS
+    # --------------------------------------------------------
+
+    with mv_tabs[6]:
+
+        if len(mv_dvars) < 2:
+
+            st.warning(
+                "Pilih minimal dua variabel numerik."
+            )
+
+        else:
+
+            mh_result = mahal_fit(
+                data_use,
+                mv_dvars
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(
+                    plot_mv_mahal_idx(mh_result)
+                )
+
+            with col2:
+                show_plot(
+                    plot_mv_mahal_sc(
+                        mh_result,
+                        mv_dvars
+                    )
+                )
+
+            st.markdown(
+                "### Sepuluh observasi dengan jarak terbesar"
+            )
+
+            show_table(
+                mahal_table(
+                    data_use,
+                    mh_result,
+                    mv_dvars
+                )
+            )
+
+            f = mh_result
+            n = len(f["df"])
+            k = int(f["df"]["out"].sum())
+
+            top = f["df"].loc[
+                f["df"]["D2"].idxmax()
+            ]
+
+            z = {
+                v: (
+                    data_use[v].iloc[int(top["idx"]) - 1]
+                    - data_use[v].mean()
+                ) / data_use[v].std()
+                for v in mv_dvars
+            }
+
+            vmax = max(z, key=lambda x: abs(z[x]))
+
+            show_interpretation([
+                (
+                    f"Batas pencilan multivariat: Chi-Square 97.5% "
+                    f"dengan df = {f['p']}, yaitu "
+                    f"**{fmt(f['cut'], 2)}**."
+                ),
+                (
+                    f"Ditemukan **{k} pencilan** "
+                    f"(**{fmt(100 * k / n, 1)}%** dari "
+                    f"{n} observasi)."
+                ),
+                (
+                    f"Observasi paling ekstrem: baris "
+                    f"**{int(top['idx'])}** "
+                    f"(D2 = {fmt(top['D2'], 2)}). "
+                    f"Variabel yang paling menyimpang: "
+                    f"**{vmax}** (z = {fmt(z[vmax], 2)})."
+                ),
+                (
+                    "Pencilan multivariat dapat berupa kombinasi "
+                    "nilai yang tidak lazim walau tiap variabel "
+                    "tampak wajar. Pencilan sebaiknya diperiksa "
+                    "sebelum dihapus."
+                )
+            ])
+
+
+    # --------------------------------------------------------
+    # 10.8 Q-Q PLOT CHI-SQUARE
+    # --------------------------------------------------------
+
+    with mv_tabs[7]:
+
+        if len(mv_qvars) < 2:
+
+            st.warning(
+                "Pilih minimal dua variabel numerik."
+            )
+
+        else:
+
+            qq_result = mahal_fit(
+                data_use,
+                mv_qvars
+            )
+
+            fig = plot_mv_qqchi(qq_result)
+            show_plot(fig)
+
+            f = qq_result
+            n = len(f["df"])
+
+            sorted_d2 = np.sort(f["df"]["D2"].to_numpy())
+
+            theoretical_q = stats.chi2.ppf(
+                (np.arange(1, n + 1) - 0.5) / n,
+                df=f["p"]
+            )
+
+            r = np.corrcoef(
+                sorted_d2,
+                theoretical_q
+            )[0, 1]
+
+            extreme_rows = (
+                f["df"]
+                .sort_values("D2")
+                .tail(3)["idx"]
+                .tolist()
+            )
+
+            show_interpretation([
+                (
+                    f"Korelasi antara D2 terurut dan kuantil "
+                    f"Chi-Square = **{fmt(r, 3)}**; semakin "
+                    "mendekati 1, semakin sesuai data dengan "
+                    "normal multivariat."
+                ),
+                (
+                    "Titik terjauh dari garis berada di ujung kanan "
+                    f"(baris {', '.join(map(str, extreme_rows))})."
+                ),
+                (
+                    "Titik yang melengkung ke atas di ujung kanan "
+                    "menandakan ekor distribusi lebih berat atau "
+                    "adanya pencilan. Asumsi normalitas multivariat "
+                    "kurang terpenuhi jika penyimpangan terlihat jelas."
+                )
+            ])
+
+
+# ============================================================
+# 11. TAB 5: REGRESI LINEAR BERGANDA
+# ============================================================
+
+with tabs[4]:
+
+    if st.button(
+        "Bangun model",
+        key="run_regression"
+    ):
+
+        preds = [
+            x for x in rg_x
+            if x != rg_y
+        ]
+
+        if len(preds) < 2:
+
+            st.warning(
+                "Pilih minimal dua variabel prediktor "
+                "(selain variabel respons)."
+            )
+
+        elif rg_log == "ln(Y)" and not (
+            data_use[rg_y] > 0
+        ).all():
+
+            st.warning(
+                "Transformasi ln hanya untuk respons "
+                "bernilai positif."
+            )
+
+        else:
+
+            try:
+
+                regression_model = build_model(
+                    data_use,
+                    rg_y,
+                    preds,
+                    rg_log == "ln(Y)"
+                )
+
+                st.session_state["regression_model"] = regression_model
+                st.session_state["regression_data"] = data_use.copy()
+                st.session_state["regression_resp"] = rg_y
+                st.session_state["regression_preds"] = preds
+                st.session_state["regression_log"] = (
+                    rg_log == "ln(Y)"
+                )
+
+                st.success(
+                    "Model regresi berhasil dibangun."
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Gagal membangun model: {e}"
+                )
+
+
+    model = st.session_state.get(
+        "regression_model"
+    )
+
+    if model is None:
+
+        st.info(
+            "Bangun model regresi terlebih dahulu "
+            "untuk melihat hasil analisis."
+        )
+
+    else:
+
+        m = model
+        resp = st.session_state["regression_resp"]
+        preds = st.session_state["regression_preds"]
+        logy = st.session_state["regression_log"]
+        reg_data = st.session_state["regression_data"]
+
+        reg_tabs = st.tabs([
+            "Hasil model",
+            "Visualisasi hasil model",
+            "Galeri visualisasi regresi",
+            "Diagnostik asumsi",
+            "Keterbatasan model"
+        ])
+
+
+        # ----------------------------------------------------
+        # 11.1 HASIL MODEL
+        # ----------------------------------------------------
+
+        with reg_tabs[0]:
+
+            st.markdown("### Persamaan model")
+
+            st.code(
+                make_equation(m, resp, logy),
+                language="text"
+            )
+
+            col1, col2 = st.columns([5, 7])
+
+            with col1:
+
+                st.markdown(
+                    "#### Ukuran kecocokan model"
+                )
+
+                show_table(
+                    fit_table(m)
+                )
+
+            with col2:
+
+                st.markdown(
+                    "#### Uji signifikansi per variabel (ANOVA)"
+                )
+
+                show_table(
+                    anova_table(m)
+                )
+
+            st.markdown("### Estimasi koefisien")
+
+            show_table(
+                coef_table(m)
+            )
+
+            st.caption(
+                "Signif.: *** p<0.001, ** p<0.01, "
+                "* p<0.05, . p<0.1"
+            )
+
+            st.markdown("### Interpretasi hasil")
+
+            show_interpretation(
+                interp_reg(m, resp, logy)
+            )
+
+
+        # ----------------------------------------------------
+        # 11.2 VISUALISASI HASIL MODEL
+        # ----------------------------------------------------
+
+        with reg_tabs[1]:
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                show_plot(
+                    plot_reg_avp(m, logy, resp)
+                )
+
+            with col2:
+
+                show_plot(
+                    plot_reg_coef(m)
+                )
+
+            st.markdown("### Cara membaca")
+
+            r2 = m.rsquared
+
+            show_interpretation([
+                (
+                    f"**Aktual vs prediksi:** semakin rapat titik "
+                    f"di sekitar garis putus-putus, semakin baik "
+                    f"prediksi model (R2 = {fmt(r2, 3)})."
+                ),
+                (
+                    "**Koefisien dan selang kepercayaan:** titik "
+                    "merupakan estimasi, garis merupakan selang 95%. "
+                    "Selang yang tidak memotong garis nol menandakan "
+                    "prediktor signifikan pada taraf 5%."
+                )
+            ])
+
+
+        # ----------------------------------------------------
+        # 11.3 GALERI VISUALISASI REGRESI
+        # ----------------------------------------------------
+
+        with reg_tabs[2]:
+
+            plots = [
+                plot_reg_scatter(
+                    reg_data, resp, preds, logy
+                ),
+                plot_reg_cor(
+                    reg_data, resp, preds
+                ),
+                plot_reg_coef(m),
+                plot_reg_qq(m),
+                plot_reg_hist(m),
+                plot_reg_ts(m, reg_data),
+                plot_reg_acf(m, reg_data),
+                plot_reg_obsres(m)
+            ]
+
+            for i in range(0, len(plots), 2):
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    show_plot(plots[i])
+
+                with col2:
+                    show_plot(plots[i + 1])
+
+            st.markdown("### Cara membaca")
+
+            ordered = reg_ord_res(
+                m,
+                reg_data
+            )
+
+            residuals = np.asarray(ordered["res"])
+            n = len(residuals)
+
+            acf_values = acf(
+                residuals,
+                nlags=min(30, n - 1),
+                fft=False
+            )
+
+            ci = stats.norm.ppf(0.975) / np.sqrt(n)
+
+            significant_lags = int(
+                np.sum(
+                    np.abs(acf_values[1:]) > ci
+                )
+            )
+
+            dw = (
+                np.sum(np.diff(residuals) ** 2)
+                / np.sum(residuals ** 2)
+            )
+
+            sample_resid = (
+                np.random.default_rng(123)
+                .choice(
+                    residuals,
+                    size=5000,
+                    replace=False
+                )
+                if n > 5000
+                else residuals
+            )
+
+            sw = stats.shapiro(sample_resid).pvalue
+
+            show_interpretation([
+                (
+                    "**Scatterplot:** menunjukkan bentuk hubungan "
+                    "respons dengan tiap prediktor numerik."
+                ),
+                (
+                    "**Correlation matrix:** korelasi respons dengan "
+                    "prediktor menunjukkan kandidat prediktor kuat; "
+                    "korelasi tinggi antar prediktor mengindikasikan "
+                    "potensi multikolinearitas."
+                ),
+                (
+                    "**Coefficient CI plot:** selang 95% yang tidak "
+                    "memotong garis nol berarti koefisien signifikan "
+                    "pada taraf 5%."
+                ),
+                (
+                    f"**Normal probability plot dan histogram residual:** "
+                    f"hasil Shapiro-Wilk p {pq(sw)}, sehingga residual "
+                    f"{'**tidak normal**' if sw < 0.05 else 'normal'}."
+                ),
+                (
+                    f"**Time series plot dan ACF:** statistik "
+                    f"Durbin-Watson = {fmt(dw, 3)}; "
+                    f"{significant_lags} dari {len(acf_values) - 1} "
+                    "lag berada di luar batas 95%. "
+                    f"{'Terdapat indikasi autokorelasi residual.' if significant_lags > 0 or abs(dw - 2) >= 0.4 else 'Tidak ada indikasi autokorelasi residual yang berarti.'}"
+                ),
+                (
+                    "**Observed vs residual:** residual idealnya "
+                    "tersebar acak di sekitar nol. Sebaran yang "
+                    "melebar pada nilai observasi besar menandakan "
+                    "ragam residual tidak konstan."
+                )
+            ])
+
+
+        # ----------------------------------------------------
+        # 11.4 DIAGNOSTIK ASUMSI
+        # ----------------------------------------------------
+
+        with reg_tabs[3]:
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(plot_reg_resid(m))
+
+            with col2:
+                show_plot(plot_reg_qq(m))
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                show_plot(plot_reg_scale(m))
+
+            with col2:
+                show_plot(plot_reg_cook(m))
+
+            # Uji Shapiro-Wilk
+            residuals = np.asarray(m.resid)
+
+            sample_resid = (
+                np.random.default_rng(123)
+                .choice(
+                    residuals,
+                    size=5000,
+                    replace=False
+                )
+                if len(residuals) > 5000
+                else residuals
+            )
+
+            sh = stats.shapiro(sample_resid)
+
+            # Uji Breusch-Pagan
+            bp = bp_test(m)
+
+            if isinstance(bp, dict):
+                bp_stat = bp.get("stat")
+                bp_p = bp.get("p")
+            elif isinstance(bp, pd.Series):
+                bp_stat = bp.get("stat")
+                bp_p = bp.get("p")
+            else:
+                bp_stat = np.nan
+                bp_p = np.nan
+
+            # Cook's distance
+            influence = m.get_influence()
+            cooks_d = influence.cooks_distance[0]
+
+            cook_count = int(
+                np.sum(cooks_d > 4 / len(cooks_d))
+            )
+
+            st.markdown("### Uji asumsi")
+
+            tests = pd.DataFrame({
+                "Uji": [
+                    "Shapiro-Wilk (normalitas residual)",
+                    "Breusch-Pagan (kesamaan ragam)",
+                    "Observasi berpengaruh (Cook's D > 4/n)"
+                ],
+
+                "Statistik": [
+                    fmt(sh.statistic, 4),
+                    fmt(bp_stat, 3),
+                    str(cook_count)
+                ],
+
+                "p-value": [
+                    fmt_p(sh.pvalue),
+                    fmt_p(bp_p),
+                    "-"
+                ],
+
+                "Keputusan": [
+                    (
+                        "Tidak normal"
+                        if sh.pvalue < 0.05
+                        else "Normal"
+                    ),
+                    (
+                        "Ragam tidak konstan"
+                        if pd.notna(bp_p) and bp_p < 0.05
+                        else "Ragam konstan"
+                    ),
+                    f"{cook_count} observasi"
+                ]
+            })
+
+            show_table(tests)
+
+            st.markdown("### Multikolinearitas (VIF)")
+
+            v = vif_table(m)
+
+            if v is not None:
+
+                v = v.copy()
+
+                if "VIF setara" in v.columns:
+
+                    v["Keputusan"] = np.where(
+                        pd.to_numeric(
+                            v["VIF setara"],
+                            errors="coerce"
+                        ) < 5,
+                        "Aman",
+                        "Perlu perhatian"
+                    )
+
+                show_table(v)
+
+            else:
+
+                st.info(
+                    "VIF membutuhkan minimal dua prediktor."
+                )
+
+
+        # ----------------------------------------------------
+        # 11.5 KETERBATASAN MODEL
+        # ----------------------------------------------------
+
+        with reg_tabs[4]:
+
+            st.markdown(
+                "### Keterbatasan model yang digunakan"
+            )
+
+            bullets(KETERBATASAN)
+
+
+# ============================================================
+# 12. TAB 6: KESIMPULAN
+# ============================================================
+
+with tabs[5]:
+
+    st.markdown("### Kesimpulan utama")
+
+    model = st.session_state.get(
+        "regression_model"
+    )
+
+    if model is not None:
+
+        resp = st.session_state["regression_resp"]
+        logy = st.session_state["regression_log"]
+
+        conclusions = auto_conclusion(
+            data_use,
+            model,
+            resp,
+            logy
+        )
+
+        show_interpretation(conclusions)
+
+    else:
+
+        st.info(
+            "Bangun model regresi terlebih dahulu untuk "
+            "menampilkan kesimpulan otomatis."
+        )
+
+    st.markdown("### Rekomendasi")
+
+    bullets(REKOMENDASI)
