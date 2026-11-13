@@ -20,20 +20,20 @@ TUJUAN = [
 ]
 
 # ---- Konstanta variabel ------------------------------------------------------
-cat_base = c("Branch", "Customer type", "Gender", "Product line", "Payment")
-cat_all  = c(cat_base, "Bulan", "Hari")
-num_all  = c("Quantity", "Total", "Rating", "Hour")
+cat_base = ["Branch", "Customer type", "Gender", "Product line", "Payment"]
+cat_all  = [cat_base, "Bulan", "Hari"]
+num_all  = ["Quantity", "Total", "Rating", "Hour"]
 NONE = "(tidak ada)"
-bulan_lv = c("Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
-              "September","Oktober","November","Desember")
-hari_lv  = c("Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu")
+bulan_lv = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
+              "September","Oktober","November","Desember"]
+hari_lv  = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
 
 kamus = data.frame(
-  Variabel = c("Branch","Customer type","Gender","Product line","Quantity","Total",
-               "Date","Time","Payment","Rating","Hour (turunan)","Bulan (turunan)","Hari (turunan)"),
-  Tipe = c("Kategorik","Kategorik","Kategorik","Kategorik","Numerik (diskret)","Numerik (kontinu)",
-           "Tanggal","Waktu","Kategorik","Numerik (kontinu)","Numerik (diskret)","Kategorik","Kategorik"),
-  Definisi = c("Cabang supermarket tempat transaksi (A, B, C).",
+  Variabel = ["Branch","Customer type","Gender","Product line","Quantity","Total",
+               "Date","Time","Payment","Rating","Hour (turunan)","Bulan (turunan)","Hari (turunan)"],
+  Tipe = ["Kategorik","Kategorik","Kategorik","Kategorik","Numerik (diskret)","Numerik (kontinu)",
+           "Tanggal","Waktu","Kategorik","Numerik (kontinu)","Numerik (diskret)","Kategorik","Kategorik"],
+  Definisi = ["Cabang supermarket tempat transaksi (A, B, C).",
                "Tipe pelanggan: Member atau Normal.",
                "Jenis kelamin pelanggan: Female atau Male.",
                "Lini produk yang dibeli (6 kategori).",
@@ -45,7 +45,7 @@ kamus = data.frame(
                "Penilaian kepuasan pelanggan (skala 1-10, nilai teramati 4-10).",
                "Jam transaksi (0-23) yang diambil dari Time.",
                "Bulan transaksi yang diambil dari Date.",
-               "Hari dalam seminggu yang diambil dari Date."),
+               "Hari dalam seminggu yang diambil dari Date."],
   stringsAsFactors = FALSE)
 
 # ---- Membaca dan menyiapkan data --------------------------------------------
