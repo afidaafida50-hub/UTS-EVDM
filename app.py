@@ -3501,170 +3501,1391 @@ def plot_mv_qqchi(f):
 # =============================================================================
 # 5. REGRESI LINEAR BERGANDA
 # =============================================================================
-build_model <- function(d, resp, preds, logy) {
-  f <- paste0(if (logy) paste0("log(`", resp, "`)") else paste0("`", resp, "`"), " ~ ", paste0("`", preds, "`", collapse = " + "))
-  lm(as.formula(f), data = d)
-}
-clean <- function(x) gsub("`", "", x)
-term_of <- function(m, cn) {
-  tl <- clean(attr(terms(m), "term.labels")); cn <- clean(cn)
-  cand <- tl[startsWith(cn, tl)]; cand[which.max(nchar(cand))]
-}
-coef_label <- function(m, cn) {
-  tl <- term_of(m, cn); cn2 <- clean(cn)
-  if (cn2 == tl) tl else paste0(tl, " = ", substring(cn2, nchar(tl) + 1))
-}
-make_equation <- function(m, resp, logy) {
-  b <- coef(m); lab <- vapply(names(b), function(n) if (n == "(Intercept)") "" else coef_label(m, n), "")
-  lhs <- if (logy) paste0("ln(", resp, ")") else resp
-  ln <- c(sprintf("%s-hat = %s", lhs, fmt(b[1], 4)),
-          vapply(seq_along(b)[-1], function(i) sprintf("   %s %s x [%s]", if (b[i] >= 0) "+" else "-", fmt(abs(b[i]), 4), lab[i]), ""))
-  paste(ln, collapse = "\n")
-}
-vif_table <- function(m) {
-  tryCatch({
-    mm <- model.matrix(m); asg <- attr(mm, "assign"); mm <- mm[, -1, drop = FALSE]; asg <- asg[-1]
-    tl <- clean(attr(terms(m), "term.labels")); if (length(unique(asg)) < 2) return(NULL)
-    R <- cor(mm); dR <- det(R)
-    do.call(rbind, lapply(unique(asg), function(t) {
-      i <- which(asg == t); gv <- det(R[i, i, drop = FALSE]) * det(R[-i, -i, drop = FALSE]) / dR
-      data.frame(Variabel = tl[t], Df = length(i), `VIF setara` = gv^(1 / length(i)), check.names = FALSE)
-    }))
-  }, error = function(e) NULL)
-}
-bp_test <- function(m) {
-  e <- resid(m); u <- e^2 / (sum(e^2) / length(e)); X <- model.matrix(m); ft <- lm.fit(X, u)
-  stat <- sum((ft$fitted.values - mean(u))^2) / 2; df <- ncol(X) - 1
-  c(stat = stat, df = df, p = pchisq(stat, df, lower.tail = FALSE))
-}
-reg_df <- function(m) {
-  data.frame(fit = fitted(m), act = model.frame(m)[[1]], res = resid(m), rs = rstandard(m), cook = cooks.distance(m), idx = seq_along(resid(m)))
-}
-fit_table <- function(m) {
-  s <- summary(m); f <- s$fstatistic; e <- resid(m)
-  data.frame(Ukuran = c("Jumlah observasi (n)", "Derajat bebas residual", "R-kuadrat", "R-kuadrat terkoreksi (Adj. R2)", "Galat baku residual (sigma)", "RMSE", "MAE",
-                        "Statistik F", "p-value (uji F simultan)", "AIC", "BIC"),
-             Nilai = c(nobs(m), m$df.residual, fmt(s$r.squared, 4), fmt(s$adj.r.squared, 4), fmt(s$sigma, 3), fmt(sqrt(mean(e^2)), 3), fmt(mean(abs(e)), 3),
-                       sprintf("%s (df1 = %d, df2 = %d)", fmt(f[1], 2), f[2], f[3]), fmt_p(pf(f[1], f[2], f[3], lower.tail = FALSE)), fmt(AIC(m), 2), fmt(BIC(m), 2)))
-}
-coef_table <- function(m) {
-  s <- summary(m)$coefficients; ci <- confint(m)
-  data.frame(Koefisien = vapply(rownames(s), function(n) if (n == "(Intercept)") "Intersep" else coef_label(m, n), ""),
-             Estimasi = fmt(s[, 1], 4), `Galat baku` = fmt(s[, 2], 4), t = fmt(s[, 3], 3), `p-value` = fmt_p(s[, 4]),
-             `CI 2.5%` = fmt(ci[, 1], 3), `CI 97.5%` = fmt(ci[, 2], 3), Sig. = stars(s[, 4]), check.names = FALSE, row.names = NULL)
-}
-anova_table <- function(m) {
-  a <- anova(m); data.frame(Variabel = clean(rownames(a)), Df = a$Df, `Jumlah kuadrat` = fmt(a$`Sum Sq`, 1), `Kuadrat tengah` = fmt(a$`Mean Sq`, 1),
-                            F = ifelse(is.na(a$`F value`), "", fmt(a$`F value`, 3)), `p-value` = ifelse(is.na(a$`Pr(>F)`), "", fmt_p(a$`Pr(>F)`)), check.names = FALSE)
-}
 
-plot_reg_avp <- function(m, logy, resp) {
-  df <- reg_df(m); r2 <- summary(m)$r.squared; sc <- if (logy) paste0("ln(", resp, ")") else resp
-  ggplot(df, aes(fit, act)) + geom_point(colour = pk$m, alpha = .45, size = 1.8) + geom_abline(slope = 1, intercept = 0, colour = pk$d, linetype = "dashed", linewidth = 1) +
-    labs(title = "Nilai aktual vs prediksi", subtitle = sprintf("Garis putus-putus = prediksi sempurna | R2 = %.3f", r2), x = paste("Prediksi", sc), y = paste("Aktual", sc)) + theme_pink()
-}
-plot_reg_coef <- function(m) {
-  s <- summary(m)$coefficients; ci <- confint(m); keep <- rownames(s) != "(Intercept)"
-  df <- data.frame(lab = vapply(rownames(s)[keep], function(n) coef_label(m, n), ""), est = s[keep, 1], lo = ci[keep, 1], hi = ci[keep, 2], p = s[keep, 4])
-  df$sig <- ifelse(df$p < .05, "Signifikan (p < 0.05)", "Tidak signifikan"); df$lab <- factor(df$lab, levels = rev(df$lab))
-  ggplot(df, aes(est, lab, colour = sig)) + geom_vline(xintercept = 0, colour = pk$mauve, linetype = "dashed") + geom_errorbarh(aes(xmin = lo, xmax = hi), height = .25, linewidth = .8) + geom_point(size = 2.6) +
-    scale_colour_manual(values = c("Signifikan (p < 0.05)" = pk$d, "Tidak signifikan" = "#B39DAB"), name = NULL) +
-    labs(title = "Estimasi koefisien dan selang kepercayaan 95%", subtitle = "Selang yang memotong garis nol berarti tidak signifikan", x = "Estimasi koefisien", y = NULL) + theme_pink() + theme(legend.position = "bottom")
-}
-plot_reg_resid <- function(m) {
-  df <- reg_df(m)
-  ggplot(df, aes(fit, res)) + geom_point(colour = pk$m, alpha = .45, size = 1.6) + geom_hline(yintercept = 0, colour = pk$mauve, linetype = "dashed") +
-    geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = .9) +
-    labs(title = "Residual vs nilai prediksi", subtitle = "Sebaran acak di sekitar nol = asumsi terpenuhi", x = "Nilai prediksi", y = "Residual") + theme_pink(11)
-}
-plot_reg_qq <- function(m) {
-  df <- reg_df(m)
-  ggplot(df, aes(sample = rs)) + stat_qq(colour = pk$m, alpha = .6) + stat_qq_line(colour = pk$d) +
-    labs(title = "Normal probability plot (QQ-plot residual terstandar)", subtitle = "Titik mengikuti garis = residual mendekati normal", x = "Kuantil teoretis", y = "Kuantil sampel") + theme_pink(11)
-}
-plot_reg_scale <- function(m) {
-  df <- reg_df(m)
-  ggplot(df, aes(fit, sqrt(abs(rs)))) + geom_point(colour = pk$m, alpha = .45, size = 1.6) + geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = .9) +
-    labs(title = "Scale-Location", subtitle = "Garis datar = ragam residual konstan (homoskedastis)", x = "Nilai prediksi", y = "Akar |residual terstandar|") + theme_pink(11)
-}
-plot_reg_cook <- function(m) {
-  df <- reg_df(m); thr <- 4 / nrow(df); top <- df[order(-df$cook), ][1:3, ]
-  ggplot(df, aes(idx, cook)) + geom_segment(aes(xend = idx, yend = 0), colour = pk$l) + geom_hline(yintercept = thr, colour = pk$d, linetype = "dashed") +
-    geom_text(data = top, aes(label = idx), vjust = -.4, colour = pk$d, size = 3.2) +
-    labs(title = "Cook's distance", subtitle = sprintf("Garis putus-putus = 4/n = %.4f", thr), x = "Indeks observasi", y = "Cook's distance") + theme_pink(11)
-}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# ---- Visualisasi regresi tambahan ----
-reg_ord_res <- function(m, d) { o <- order(d$Date, seq_len(nrow(d))); list(res = unname(resid(m))[o], date = d$Date[o]) }
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import statsmodels.stats.api as sms
 
-plot_reg_scatter <- function(d, resp, preds, logy) {
-  nums <- preds[preds %in% num_all]
-  validate(need(length(nums) >= 1, "Pilih minimal satu prediktor numerik untuk scatterplot."))
-  yv <- if (logy) log(d[[resp]]) else d[[resp]]
-  long <- do.call(rbind, lapply(nums, function(v) data.frame(Prediktor = v, x = d[[v]], y = yv)))
-  ggplot(long, aes(x, y)) + geom_point(colour = pk$m, alpha = .35, size = 1.3) +
-    geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = pk$d, fill = pk$xl, linewidth = .9) +
-    facet_wrap(vars(Prediktor), scales = "free_x") +
-    labs(title = "Scatterplot respons terhadap prediktor numerik", subtitle = "Garis = regresi linear sederhana dengan pita kepercayaan 95%", x = "Nilai prediktor", y = if (logy) paste0("ln(", resp, ")") else resp) + theme_pink(11)
-}
-plot_reg_cor <- function(d, resp, preds) {
-  vars <- unique(c(resp, preds[preds %in% num_all])); validate(need(length(vars) >= 2, "Pilih minimal satu prediktor numerik untuk matriks korelasi."))
-  plot_mv_cor(d, vars, "pearson") + labs(title = "Correlation matrix (respons dan prediktor numerik)")
-}
-plot_reg_hist <- function(m) {
-  df <- reg_df(m)
-  ggplot(df, aes(res)) + geom_histogram(aes(y = after_stat(density)), bins = 30, fill = pk$xl, colour = "white") + geom_density(colour = pk$d, linewidth = 1) +
-    stat_function(fun = dnorm, args = list(mean = mean(df$res), sd = sd(df$res)), colour = pk$slate, linetype = "dashed", linewidth = .9) +
-    labs(title = "Histogram residual", subtitle = "Garis tebal = density residual; putus-putus = kurva normal teoretis", x = "Residual", y = "Densitas") + theme_pink(11)
-}
-plot_reg_ts <- function(m, d) {
-  o <- reg_ord_res(m, d); n <- length(o$res); df <- data.frame(t = seq_len(n), res = o$res); br <- unique(round(seq(1, n, length.out = 6)))
-  ggplot(df, aes(t, res)) + geom_line(colour = pk$l, linewidth = .4) + geom_point(colour = pk$m, size = .8, alpha = .5) + geom_hline(yintercept = 0, colour = pk$mauve, linetype = "dashed") +
-    geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = .9) +
-    scale_x_continuous(breaks = br, labels = format(o$date[br], "%d-%m-%Y")) +
-    labs(title = "Time series plot residual", subtitle = "Observasi diurutkan menurut tanggal transaksi; garis tebal = tren (loess)", x = "Tanggal transaksi (urutan observasi)", y = "Residual") + theme_pink(11)
-}
-plot_reg_acf <- function(m, d) {
-  o <- reg_ord_res(m, d); n <- length(o$res); a <- acf(o$res, lag.max = min(30, n - 1), plot = FALSE)
-  df <- data.frame(lag = as.numeric(a$lag)[-1], acf = as.numeric(a$acf)[-1]); ci <- qnorm(.975) / sqrt(n)
-  ggplot(df, aes(lag, acf)) + geom_hline(yintercept = 0, colour = pk$mauve) + geom_segment(aes(xend = lag, yend = 0), colour = pk$m, linewidth = 1) + geom_point(colour = pk$d, size = 1.8) +
-    geom_hline(yintercept = c(-ci, ci), colour = pk$slate, linetype = "dashed") +
-    labs(title = "ACF plot residual", subtitle = "Garis putus-putus = batas 95%; lag 0 tidak ditampilkan", x = "Lag", y = "Autokorelasi") + theme_pink(11)
-}
-plot_reg_obsres <- function(m) {
-  df <- reg_df(m)
-  ggplot(df, aes(act, res)) + geom_point(colour = pk$m, alpha = .45, size = 1.6) + geom_hline(yintercept = 0, colour = pk$mauve, linetype = "dashed") +
-    geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = pk$d, linewidth = .9) +
-    labs(title = "Observed vs residual", subtitle = "Pola menyebar/mengerucut menandakan ragam residual tidak konstan", x = "Nilai observasi (aktual)", y = "Residual") + theme_pink(11)
-}
+from scipy import stats
+from scipy.stats import chi2, shapiro
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from patsy import dmatrices, build_design_matrices
+import re
 
-interp_reg <- function(m, resp, logy) {
-  s <- summary(m); f <- s$fstatistic; pF <- pf(f[1], f[2], f[3], lower.tail = FALSE); n <- nobs(m)
-  r2 <- s$r2 <- s$r.squared; ar2 <- s$adj.r.squared
-  kat <- if (ar2 < .3) "lemah" else if (ar2 < .6) "sedang" else "kuat"
-  out <- c(sprintf("**Uji simultan (uji F):** F = %s, p %s. %s", fmt(f[1], 2), if (pF < .001) "< 0.001" else paste("=", fmt_p(pF)),
-                   if (pF < .05) "Minimal satu prediktor berpengaruh signifikan terhadap respons, sehingga model layak digunakan." else "Tidak ada prediktor yang berpengaruh signifikan secara simultan."),
-           sprintf("**Kemampuan model:** R2 = %s dan Adj. R2 = %s, artinya sekitar **%s%%** keragaman %s dijelaskan oleh prediktor dalam model (kategori **%s**); sisanya dijelaskan faktor lain di luar model.", fmt(r2, 3), fmt(ar2, 3), fmt(100 * ar2, 1), if (logy) paste0("ln(", resp, ")") else resp, kat))
-  co <- coef(s)[-1, , drop = FALSE]; sg <- co[co[, 4] < .05, , drop = FALSE]
-  if (nrow(sg) == 0) out <- c(out, "**Uji parsial (uji t):** tidak ada koefisien yang signifikan pada taraf 5%.")
-  else {
-    out <- c(out, sprintf("**Uji parsial (uji t):** prediktor signifikan pada taraf 5%%: **%s**.", paste(vapply(rownames(sg), function(n) coef_label(m, n), ""), collapse = ", ")))
-    for (nm in rownames(sg)) {
-      b <- sg[nm, 1]; tl <- term_of(m, nm); isnum <- !(tl %in% names(m$xlevels))
-      eff <- if (logy) sprintf("%s%%", fmt(100 * (exp(abs(b)) - 1), 1)) else fmt(abs(b), 3)
-      verb <- if (b > 0) "naik" else "turun"
-      out <- c(out, if (isnum) sprintf("Setiap kenaikan 1 satuan **%s**, rata-rata **%s** %s sebesar **%s**, dengan variabel lain dianggap tetap.", tl, resp, verb, eff)
-               else sprintf("Dibanding kategori acuan **%s**, kategori **%s** memiliki rata-rata **%s** yang %s sebesar **%s**, dengan variabel lain dianggap tetap.", m$xlevels[[tl]][1], substring(clean(nm), nchar(tl) + 1), resp, if (b > 0) "lebih tinggi" else "lebih rendah", eff))
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def _pk():
+    return globals().get("pk", {
+        "bg": "#FFF5F8",
+        "d": "#C45B83",
+        "m": "#D98BA9",
+        "s": "#B65C83",
+        "slate": "#8B9BAA",
+        "xl": "#F3C6D5",
+        "txt": "#59434D",
+        "l": "#E8B7CA",
+        "mauve": "#B58AA0"
+    })
+
+
+def _fmt(x, digits=3):
+    if "fmt" in globals():
+        return fmt(x, digits)
+    return f"{x:.{digits}f}".replace(".", ",")
+
+
+def _fmt_p(p):
+    if "fmt_p" in globals():
+        return fmt_p(p)
+    return "< 0,001" if p < 0.001 else _fmt(p, 3)
+
+
+def _pq(p):
+    if "pq" in globals():
+        return pq(p)
+    return _fmt_p(p)
+
+
+def _clean(x):
+    return str(x).replace("`", "")
+
+
+def _theme(ax, size=11):
+    pk = _pk()
+    ax.set_facecolor(pk["bg"])
+    ax.tick_params(colors=pk["txt"], labelsize=size)
+    ax.xaxis.label.set_color(pk["txt"])
+    ax.yaxis.label.set_color(pk["txt"])
+    ax.title.set_color(pk["txt"])
+    ax.title.set_fontweight("bold")
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_color("#E8D5DE")
+
+
+def _palette(n):
+    if "pal_cat" in globals():
+        return pal_cat(n)
+    return sns.color_palette("husl", max(n, 1))
+
+
+def _is_none(x):
+    return x is None or x == "NONE"
+
+
+# ============================================================
+# BUILD REGRESSION MODEL
+# ============================================================
+
+def build_model(d, resp, preds, logy):
+
+    if logy and (d[resp] <= 0).any():
+        raise ValueError(
+            "Transformasi log tidak dapat dilakukan karena "
+            "variabel respons memiliki nilai nol atau negatif."
+        )
+
+    temp = d.copy()
+
+    response = f"np.log(Q('{resp}'))" if logy else f"Q('{resp}')"
+
+    predictors = " + ".join(
+        [f"C(Q('{v}'))" if not pd.api.types.is_numeric_dtype(temp[v])
+         else f"Q('{v}')"
+         for v in preds]
+    )
+
+    formula = f"{response} ~ {predictors}"
+
+    model = smf.ols(formula=formula, data=temp).fit()
+
+    return model
+
+
+# ============================================================
+# CLEAN VARIABLE NAMES
+# ============================================================
+
+def clean(x):
+    return _clean(x)
+
+
+# ============================================================
+# IDENTIFY TERM
+# ============================================================
+
+def term_of(m, cn):
+
+    tl = [
+        _clean(t)
+        for t in m.model.exog_names
+        if t != "Intercept"
+    ]
+
+    cn = _clean(cn)
+
+    candidates = [
+        t for t in tl
+        if cn.startswith(t)
+    ]
+
+    if not candidates:
+        return cn
+
+    return max(candidates, key=len)
+
+
+# ============================================================
+# COEFFICIENT LABEL
+# ============================================================
+
+def coef_label(m, cn):
+
+    tl = term_of(m, cn)
+    cn2 = _clean(cn)
+
+    if cn2 == tl:
+        return tl
+
+    return f"{tl} = {cn2[len(tl):]}"
+
+
+# ============================================================
+# MAKE REGRESSION EQUATION
+# ============================================================
+
+def make_equation(m, resp, logy):
+
+    b = m.params
+
+    lines = []
+
+    lhs = f"ln({resp})" if logy else resp
+
+    lines.append(
+        f"{lhs}-hat = {_fmt(b.iloc[0], 4)}"
+    )
+
+    for name, value in b.iloc[1:].items():
+
+        label = coef_label(m, name)
+
+        sign = "+" if value >= 0 else "-"
+
+        lines.append(
+            f"   {sign} {_fmt(abs(value), 4)} x [{label}]"
+        )
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# VIF TABLE / GENERALIZED VIF
+# ============================================================
+
+def vif_table(m):
+
+    try:
+
+        X = pd.DataFrame(
+            m.model.exog,
+            columns=m.model.exog_names
+        )
+
+        X = X.drop(columns=["Intercept"], errors="ignore")
+
+        design_info = m.model.data.design_info
+
+        term_slices = design_info.term_name_slices
+
+        groups = {}
+
+        for term, sl in term_slices.items():
+
+            if term == "Intercept":
+                continue
+
+            start = sl.start - 1
+            stop = sl.stop - 1
+
+            groups[term] = list(range(start, stop))
+
+        if len(groups) < 2:
+            return None
+
+        R = np.corrcoef(X.to_numpy(), rowvar=False)
+
+        if R.ndim == 0:
+            return None
+
+        det_R = np.linalg.det(R)
+
+        if abs(det_R) < 1e-12:
+            return None
+
+        results = []
+
+        for term, indices in groups.items():
+
+            i = indices
+            j = [k for k in range(R.shape[0]) if k not in i]
+
+            det_i = np.linalg.det(R[np.ix_(i, i)])
+
+            det_j = (
+                np.linalg.det(R[np.ix_(j, j)])
+                if j else 1
+            )
+
+            gv = det_i * det_j / det_R
+
+            results.append({
+                "Variabel": _clean(term),
+                "Df": len(i),
+                "VIF setara": gv ** (1 / len(i))
+            })
+
+        return pd.DataFrame(results)
+
+    except Exception:
+        return None
+
+
+# ============================================================
+# BREUSCH-PAGAN TEST
+# ============================================================
+
+def bp_test(m):
+
+    e = m.resid
+
+    X = m.model.exog
+
+    u = e ** 2 / np.mean(e ** 2)
+
+    auxiliary = sm.OLS(u, X).fit()
+
+    stat = np.sum(
+        (auxiliary.fittedvalues - np.mean(u)) ** 2
+    ) / 2
+
+    df = X.shape[1] - 1
+
+    p = chi2.sf(stat, df)
+
+    return {
+        "stat": stat,
+        "df": df,
+        "p": p
     }
-  }
-  tl_all <- unique(vapply(rownames(co), function(n) term_of(m, n), "")); tl_sig <- unique(vapply(rownames(sg), function(n) term_of(m, n), ""))
-  ns <- setdiff(tl_all, tl_sig)
-  if (length(ns) > 0) out <- c(out, sprintf("Variabel **tidak signifikan** (tidak ada bukti pengaruh setelah variabel lain dikendalikan): %s.", paste(ns, collapse = ", ")))
-  sh <- shapiro.test(if (nobs(m) > 5000) sample(resid(m), 5000) else resid(m))$p.value; bp <- bp_test(m)["p"]; vt <- vif_table(m)
-  out <- c(out, sprintf("**Asumsi residual:** normalitas (Shapiro-Wilk) p %s, sehingga %s; kesamaan ragam (Breusch-Pagan) p %s, sehingga %s.", pq(sh), if (sh < .05) "residual **tidak normal**" else "residual normal", pq(bp), if (bp < .05) "ragam residual **tidak konstan**" else "ragam konstan"))
-  if (!is.null(vt)) out <- c(out, sprintf("**Multikolinearitas:** VIF setara maksimum = %s (%s).", fmt(max(vt[["VIF setara"]]), 2), if (max(vt[["VIF setara"]]) < 5) "aman, di bawah 5" else "perlu diperhatikan, di atas 5"))
-  out
-}
+
+
+# ============================================================
+# REGRESSION DATA
+# ============================================================
+
+def reg_df(m):
+
+    return pd.DataFrame({
+        "fit": m.fittedvalues,
+        "act": m.model.endog,
+        "res": m.resid,
+        "rs": m.get_influence().resid_studentized_internal,
+        "cook": m.get_influence().cooks_distance[0],
+        "idx": np.arange(1, len(m.resid) + 1)
+    })
+
+
+# ============================================================
+# MODEL FIT TABLE
+# ============================================================
+
+def fit_table(m):
+
+    e = m.resid
+
+    f = m.fvalue
+    df1 = m.df_model
+    df2 = m.df_resid
+
+    pF = m.f_pvalue
+
+    data = {
+        "Ukuran": [
+            "Jumlah observasi (n)",
+            "Derajat bebas residual",
+            "R-kuadrat",
+            "R-kuadrat terkoreksi (Adj. R2)",
+            "Galat baku residual (sigma)",
+            "RMSE",
+            "MAE",
+            "Statistik F",
+            "p-value (uji F simultan)",
+            "AIC",
+            "BIC"
+        ],
+        "Nilai": [
+            int(m.nobs),
+            int(m.df_resid),
+            _fmt(m.rsquared, 4),
+            _fmt(m.rsquared_adj, 4),
+            _fmt(np.sqrt(m.mse_resid), 3),
+            _fmt(np.sqrt(np.mean(e ** 2)), 3),
+            _fmt(np.mean(np.abs(e)), 3),
+            f"{_fmt(f, 2)} (df1 = {int(df1)}, df2 = {int(df2)})",
+            _fmt_p(pF),
+            _fmt(m.aic, 2),
+            _fmt(m.bic, 2)
+        ]
+    }
+
+    return pd.DataFrame(data)
+
+
+# ============================================================
+# COEFFICIENT TABLE
+# ============================================================
+
+def coef_table(m):
+
+    ci = m.conf_int()
+
+    s = m.summary2().tables[1]
+
+    rows = []
+
+    for name in m.params.index:
+
+        value = m.params[name]
+
+        p = m.pvalues[name]
+
+        label = (
+            "Intersep"
+            if name == "Intercept"
+            else coef_label(m, name)
+        )
+
+        if p < 0.001:
+            sig = "***"
+        elif p < 0.01:
+            sig = "**"
+        elif p < 0.05:
+            sig = "*"
+        elif p < 0.1:
+            sig = "."
+        else:
+            sig = ""
+
+        rows.append({
+            "Koefisien": label,
+            "Estimasi": _fmt(value, 4),
+            "Galat baku": _fmt(m.bse[name], 4),
+            "t": _fmt(m.tvalues[name], 3),
+            "p-value": _fmt_p(p),
+            "CI 2.5%": _fmt(ci.loc[name, 0], 3),
+            "CI 97.5%": _fmt(ci.loc[name, 1], 3),
+            "Sig.": sig
+        })
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================
+# ANOVA TABLE
+# ============================================================
+
+def anova_table(m):
+
+    a = sm.stats.anova_lm(m, typ=1)
+
+    rows = []
+
+    for variable, row in a.iterrows():
+
+        rows.append({
+            "Variabel": _clean(variable),
+            "Df": int(row["df"]),
+            "Jumlah kuadrat": _fmt(row["sum_sq"], 1),
+            "Kuadrat tengah": _fmt(
+                row["sum_sq"] / row["df"], 1
+            ),
+            "F": (
+                ""
+                if pd.isna(row["F"])
+                else _fmt(row["F"], 3)
+            ),
+            "p-value": (
+                ""
+                if pd.isna(row["PR(>F)"])
+                else _fmt_p(row["PR(>F)"])
+            )
+        })
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================
+# ACTUAL VS PREDICTED PLOT
+# ============================================================
+
+def plot_reg_avp(m, logy, resp):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    r2 = m.rsquared
+
+    sc = f"ln({resp})" if logy else resp
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.scatter(
+        df["fit"],
+        df["act"],
+        color=pk["m"],
+        alpha=0.45,
+        s=35
+    )
+
+    low = min(df["fit"].min(), df["act"].min())
+    high = max(df["fit"].max(), df["act"].max())
+
+    ax.plot(
+        [low, high],
+        [low, high],
+        color=pk["d"],
+        linestyle="--",
+        linewidth=1.3
+    )
+
+    ax.set_title("Nilai aktual vs prediksi")
+
+    ax.set_xlabel(f"Prediksi {sc}")
+    ax.set_ylabel(f"Aktual {sc}")
+
+    ax.text(
+        0.5, 1.02,
+        f"Garis putus-putus = prediksi sempurna | R2 = {r2:.3f}",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# COEFFICIENT PLOT
+# ============================================================
+
+def plot_reg_coef(m):
+
+    pk = _pk()
+
+    ci = m.conf_int()
+
+    rows = []
+
+    for name in m.params.index:
+
+        if name == "Intercept":
+            continue
+
+        p = m.pvalues[name]
+
+        rows.append({
+            "lab": coef_label(m, name),
+            "est": m.params[name],
+            "lo": ci.loc[name, 0],
+            "hi": ci.loc[name, 1],
+            "p": p,
+            "sig": (
+                "Signifikan (p < 0.05)"
+                if p < 0.05
+                else "Tidak signifikan"
+            )
+        })
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        raise ValueError("Tidak ada koefisien prediktor untuk ditampilkan.")
+
+    df["lab"] = pd.Categorical(
+        df["lab"],
+        categories=df["lab"].iloc[::-1],
+        ordered=True
+    )
+
+    fig, ax = plt.subplots(figsize=(9, max(5, len(df) * 0.5)))
+
+    colors = {
+        "Signifikan (p < 0.05)": pk["d"],
+        "Tidak signifikan": "#B39DAB"
+    }
+
+    ax.axvline(
+        0,
+        color=pk["mauve"],
+        linestyle="--"
+    )
+
+    for _, row in df.iterrows():
+
+        ax.errorbar(
+            row["est"],
+            row["lab"],
+            xerr=[
+                [row["est"] - row["lo"]],
+                [row["hi"] - row["est"]]
+            ],
+            fmt="o",
+            color=colors[row["sig"]],
+            capsize=4,
+            markersize=7
+        )
+
+    ax.set_title("Estimasi koefisien dan selang kepercayaan 95%")
+
+    ax.set_xlabel("Estimasi koefisien")
+    ax.set_ylabel("")
+
+    ax.text(
+        0.5, 1.02,
+        "Selang yang memotong garis nol berarti tidak signifikan",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# RESIDUAL VS FITTED
+# ============================================================
+
+def plot_reg_resid(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.scatter(
+        df["fit"],
+        df["res"],
+        color=pk["m"],
+        alpha=0.45,
+        s=30
+    )
+
+    smoothed = lowess(
+        df["res"],
+        df["fit"],
+        frac=0.6
+    )
+
+    ax.plot(
+        smoothed[:, 0],
+        smoothed[:, 1],
+        color=pk["d"],
+        linewidth=1.5
+    )
+
+    ax.axhline(
+        0,
+        color=pk["mauve"],
+        linestyle="--"
+    )
+
+    ax.set_title("Residual vs nilai prediksi")
+
+    ax.set_xlabel("Nilai prediksi")
+    ax.set_ylabel("Residual")
+
+    ax.text(
+        0.5, 1.02,
+        "Sebaran acak di sekitar nol = asumsi terpenuhi",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# NORMAL Q-Q PLOT
+# ============================================================
+
+def plot_reg_qq(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    stats.probplot(
+        df["rs"],
+        dist="norm",
+        plot=ax
+    )
+
+    ax.get_lines()[0].set_color(pk["m"])
+    ax.get_lines()[0].set_alpha(0.6)
+
+    ax.get_lines()[1].set_color(pk["d"])
+
+    ax.set_title(
+        "Normal probability plot (QQ-plot residual terstandar)"
+    )
+
+    ax.set_xlabel("Kuantil teoretis")
+    ax.set_ylabel("Kuantil sampel")
+
+    ax.text(
+        0.5, 1.02,
+        "Titik mengikuti garis = residual mendekati normal",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# SCALE LOCATION PLOT
+# ============================================================
+
+def plot_reg_scale(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.scatter(
+        df["fit"],
+        np.sqrt(np.abs(df["rs"])),
+        color=pk["m"],
+        alpha=0.45,
+        s=30
+    )
+
+    smoothed = lowess(
+        np.sqrt(np.abs(df["rs"])),
+        df["fit"],
+        frac=0.6
+    )
+
+    ax.plot(
+        smoothed[:, 0],
+        smoothed[:, 1],
+        color=pk["d"],
+        linewidth=1.5
+    )
+
+    ax.set_title("Scale-Location")
+
+    ax.set_xlabel("Nilai prediksi")
+    ax.set_ylabel("Akar |residual terstandar|")
+
+    ax.text(
+        0.5, 1.02,
+        "Garis datar = ragam residual konstan (homoskedastis)",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# COOK'S DISTANCE
+# ============================================================
+
+def plot_reg_cook(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    thr = 4 / len(df)
+
+    top = df.nlargest(3, "cook")
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    ax.vlines(
+        df["idx"],
+        0,
+        df["cook"],
+        color=pk["l"]
+    )
+
+    ax.axhline(
+        thr,
+        color=pk["d"],
+        linestyle="--"
+    )
+
+    ax.scatter(
+        df["idx"],
+        df["cook"],
+        color=pk["m"],
+        s=20
+    )
+
+    for _, row in top.iterrows():
+
+        ax.text(
+            row["idx"],
+            row["cook"],
+            str(int(row["idx"])),
+            color=pk["d"],
+            ha="center",
+            va="bottom"
+        )
+
+    ax.set_title("Cook's distance")
+
+    ax.set_xlabel("Indeks observasi")
+    ax.set_ylabel("Cook's distance")
+
+    ax.text(
+        0.5, 1.02,
+        f"Garis putus-putus = 4/n = {thr:.4f}",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# REGRESSION ADDITIONAL VISUALIZATIONS
+# ============================================================
+
+def reg_ord_res(m, d):
+
+    if "Date" in d.columns:
+        order = np.argsort(
+            pd.to_datetime(d["Date"]).values,
+            kind="stable"
+        )
+    else:
+        order = np.arange(len(d))
+
+    return {
+        "res": np.asarray(m.resid)[order],
+        "date": (
+            pd.to_datetime(d["Date"]).values[order]
+            if "Date" in d.columns
+            else np.arange(1, len(d) + 1)
+        )
+    }
+
+
+# ============================================================
+# REGRESSION SCATTERPLOT
+# ============================================================
+
+def plot_reg_scatter(d, resp, preds, logy):
+
+    pk = _pk()
+
+    num_all = globals().get("num_all", [])
+
+    nums = [v for v in preds if v in num_all]
+
+    if len(nums) < 1:
+        raise ValueError(
+            "Pilih minimal satu prediktor numerik untuk scatterplot."
+        )
+
+    yv = np.log(d[resp]) if logy else d[resp]
+
+    n = len(nums)
+
+    fig, axes = plt.subplots(
+        1, n,
+        figsize=(6 * n, 5),
+        squeeze=False
+    )
+
+    for i, v in enumerate(nums):
+
+        ax = axes[0, i]
+
+        temp = pd.DataFrame({
+            "x": d[v],
+            "y": yv
+        }).dropna()
+
+        ax.scatter(
+            temp["x"],
+            temp["y"],
+            color=pk["m"],
+            alpha=0.35,
+            s=20
+        )
+
+        sns.regplot(
+            data=temp,
+            x="x",
+            y="y",
+            scatter=False,
+            ci=95,
+            color=pk["d"],
+            line_kws={"linewidth": 1.2},
+            ax=ax
+        )
+
+        ax.set_title(v)
+        ax.set_xlabel(v)
+        ax.set_ylabel(
+            f"ln({resp})" if logy else resp
+        )
+
+        _theme(ax)
+
+    fig.suptitle(
+        "Scatterplot respons terhadap prediktor numerik",
+        fontweight="bold",
+        color=pk["d"]
+    )
+
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# REGRESSION CORRELATION MATRIX
+# ============================================================
+
+def plot_reg_cor(d, resp, preds):
+
+    num_all = globals().get("num_all", [])
+
+    vars = list(dict.fromkeys(
+        [resp] + [v for v in preds if v in num_all]
+    ))
+
+    if len(vars) < 2:
+        raise ValueError(
+            "Pilih minimal satu prediktor numerik untuk matriks korelasi."
+        )
+
+    fig = plot_mv_cor(
+        d,
+        vars,
+        "pearson"
+    )
+
+    return fig
+
+
+# ============================================================
+# RESIDUAL HISTOGRAM
+# ============================================================
+
+def plot_reg_hist(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    sns.histplot(
+        df["res"],
+        bins=30,
+        stat="density",
+        color=pk["xl"],
+        edgecolor="white",
+        ax=ax
+    )
+
+    sns.kdeplot(
+        df["res"],
+        color=pk["d"],
+        linewidth=1.3,
+        ax=ax
+    )
+
+    x = np.linspace(
+        df["res"].min(),
+        df["res"].max(),
+        200
+    )
+
+    ax.plot(
+        x,
+        stats.norm.pdf(
+            x,
+            loc=df["res"].mean(),
+            scale=df["res"].std()
+        ),
+        color=pk["slate"],
+        linestyle="--",
+        linewidth=1.2
+    )
+
+    ax.set_title("Histogram residual")
+
+    ax.set_xlabel("Residual")
+    ax.set_ylabel("Densitas")
+
+    ax.text(
+        0.5, 1.02,
+        "Garis tebal = density residual; putus-putus = kurva normal teoretis",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# RESIDUAL TIME SERIES
+# ============================================================
+
+def plot_reg_ts(m, d):
+
+    pk = _pk()
+
+    o = reg_ord_res(m, d)
+
+    n = len(o["res"])
+
+    df = pd.DataFrame({
+        "t": np.arange(1, n + 1),
+        "res": o["res"]
+    })
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(
+        df["t"],
+        df["res"],
+        color=pk["l"],
+        linewidth=0.6
+    )
+
+    ax.scatter(
+        df["t"],
+        df["res"],
+        color=pk["m"],
+        s=12,
+        alpha=0.5
+    )
+
+    ax.axhline(
+        0,
+        color=pk["mauve"],
+        linestyle="--"
+    )
+
+    smoothed = lowess(
+        df["res"],
+        df["t"],
+        frac=0.6
+    )
+
+    ax.plot(
+        smoothed[:, 0],
+        smoothed[:, 1],
+        color=pk["d"],
+        linewidth=1.3
+    )
+
+    br = np.unique(
+        np.round(np.linspace(0, n - 1, 6)).astype(int)
+    )
+
+    if "Date" in d.columns:
+        labels = pd.to_datetime(o["date"][br]).strftime("%d-%m-%Y")
+    else:
+        labels = br + 1
+
+    ax.set_xticks(br + 1)
+    ax.set_xticklabels(labels, rotation=30)
+
+    ax.set_title("Time series plot residual")
+
+    ax.set_xlabel("Tanggal transaksi (urutan observasi)")
+    ax.set_ylabel("Residual")
+
+    ax.text(
+        0.5, 1.02,
+        "Observasi diurutkan menurut tanggal transaksi; garis tebal = tren (loess)",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# RESIDUAL ACF
+# ============================================================
+
+def plot_reg_acf(m, d):
+
+    pk = _pk()
+
+    o = reg_ord_res(m, d)
+
+    residuals = o["res"]
+
+    n = len(residuals)
+
+    max_lag = min(30, n - 1)
+
+    acf_values = sm.tsa.acf(
+        residuals,
+        nlags=max_lag,
+        fft=False
+    )
+
+    df = pd.DataFrame({
+        "lag": np.arange(1, max_lag + 1),
+        "acf": acf_values[1:]
+    })
+
+    ci = stats.norm.ppf(0.975) / np.sqrt(n)
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    ax.axhline(
+        0,
+        color=pk["mauve"]
+    )
+
+    ax.axhline(
+        ci,
+        color=pk["slate"],
+        linestyle="--"
+    )
+
+    ax.axhline(
+        -ci,
+        color=pk["slate"],
+        linestyle="--"
+    )
+
+    ax.vlines(
+        df["lag"],
+        0,
+        df["acf"],
+        color=pk["m"],
+        linewidth=1.2
+    )
+
+    ax.scatter(
+        df["lag"],
+        df["acf"],
+        color=pk["d"],
+        s=25
+    )
+
+    ax.set_title("ACF plot residual")
+
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Autokorelasi")
+
+    ax.text(
+        0.5, 1.02,
+        "Garis putus-putus = batas 95%; lag 0 tidak ditampilkan",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# OBSERVED VS RESIDUAL
+# ============================================================
+
+def plot_reg_obsres(m):
+
+    pk = _pk()
+
+    df = reg_df(m)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.scatter(
+        df["act"],
+        df["res"],
+        color=pk["m"],
+        alpha=0.45,
+        s=30
+    )
+
+    smoothed = lowess(
+        df["res"],
+        df["act"],
+        frac=0.6
+    )
+
+    ax.plot(
+        smoothed[:, 0],
+        smoothed[:, 1],
+        color=pk["d"],
+        linewidth=1.4
+    )
+
+    ax.axhline(
+        0,
+        color=pk["mauve"],
+        linestyle="--"
+    )
+
+    ax.set_title("Observed vs residual")
+
+    ax.set_xlabel("Nilai observasi (aktual)")
+    ax.set_ylabel("Residual")
+
+    ax.text(
+        0.5, 1.02,
+        "Pola menyebar/mengerucut menandakan ragam residual tidak konstan",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=9
+    )
+
+    _theme(ax)
+    plt.tight_layout()
+
+    return fig
+
+
+# ============================================================
+# REGRESSION INTERPRETATION
+# ============================================================
+
+def interp_reg(m, resp, logy):
+
+    f = m.fvalue
+    pF = m.f_pvalue
+
+    n = int(m.nobs)
+
+    r2 = m.rsquared
+    ar2 = m.rsquared_adj
+
+    kat = (
+        "lemah" if ar2 < 0.3
+        else "sedang" if ar2 < 0.6
+        else "kuat"
+    )
+
+    response = f"ln({resp})" if logy else resp
+
+    out = [
+        (
+            f"**Uji simultan (uji F):** F = {_fmt(f, 2)}, "
+            f"p {_pq(pF)}. "
+            + (
+                "Minimal satu prediktor berpengaruh signifikan terhadap respons, sehingga model layak digunakan."
+                if pF < 0.05
+                else "Tidak ada prediktor yang berpengaruh signifikan secara simultan."
+            )
+        ),
+
+        (
+            f"**Kemampuan model:** R2 = {_fmt(r2, 3)} dan "
+            f"Adj. R2 = {_fmt(ar2, 3)}, artinya sekitar "
+            f"**{_fmt(100 * ar2, 1)}%** keragaman {response} "
+            f"dijelaskan oleh prediktor dalam model "
+            f"(kategori **{kat}**); sisanya dijelaskan faktor lain di luar model."
+        )
+    ]
+
+    co = m.params.drop("Intercept", errors="ignore")
+
+    significant = co[m.pvalues[co.index] < 0.05]
+
+    if len(significant) == 0:
+
+        out.append(
+            "**Uji parsial (uji t):** tidak ada koefisien yang signifikan pada taraf 5%."
+        )
+
+    else:
+
+        labels = [
+            coef_label(m, name)
+            for name in significant.index
+        ]
+
+        out.append(
+            "**Uji parsial (uji t):** prediktor signifikan pada taraf 5%: "
+            f"**{', '.join(labels)}**."
+        )
+
+        for name, b in significant.items():
+
+            label = coef_label(m, name)
+
+            term = term_of(m, name)
+
+            is_categorical = (
+                "C(" in name or "[" in name
+            )
+
+            if logy:
+
+                effect = 100 * (np.exp(abs(b)) - 1)
+
+                eff = f"{_fmt(effect, 1)}%"
+
+            else:
+
+                eff = _fmt(abs(b), 3)
+
+            verb = "naik" if b > 0 else "turun"
+
+            if is_categorical:
+
+                out.append(
+                    f"Koefisien kategori **{label}** menunjukkan "
+                    f"perbedaan rata-rata respons dibandingkan kategori acuan. "
+                    f"Interpretasi besarnya perubahan mengikuti koefisien model."
+                )
+
+            else:
+
+                out.append(
+                    f"Setiap kenaikan 1 satuan **{term}**, "
+                    f"rata-rata **{resp}** {verb} sebesar **{eff}**, "
+                    "dengan variabel lain dianggap tetap."
+                )
+
+    all_terms = list(dict.fromkeys(
+        term_of(m, name)
+        for name in co.index
+    ))
+
+    sig_terms = list(dict.fromkeys(
+        term_of(m, name)
+        for name in significant.index
+    ))
+
+    ns = [
+        term for term in all_terms
+        if term not in sig_terms
+    ]
+
+    if ns:
+
+        out.append(
+            "**Variabel tidak signifikan** "
+            "(tidak ada bukti pengaruh setelah variabel lain dikendalikan): "
+            f"{', '.join(ns)}."
+        )
+
+    residuals = m.resid
+
+    sample_resid = (
+        np.random.default_rng(42).choice(
+            residuals,
+            size=5000,
+            replace=False
+        )
+        if len(residuals) > 5000
+        else residuals
+    )
+
+    sh = shapiro(sample_resid).pvalue
+
+    bp = bp_test(m)["p"]
+
+    vt = vif_table(m)
+
+    out.append(
+        f"**Asumsi residual:** normalitas (Shapiro-Wilk) "
+        f"p {_pq(sh)}, sehingga "
+        + (
+            "residual **tidak normal**"
+            if sh < 0.05
+            else "residual normal"
+        )
+        + f"; kesamaan ragam (Breusch-Pagan) p {_pq(bp)}, sehingga "
+        + (
+            "ragam residual **tidak konstan**."
+            if bp < 0.05
+            else "ragam konstan."
+        )
+    )
+
+    if vt is not None and not vt.empty:
+
+        max_vif = vt["VIF setara"].max()
+
+        out.append(
+            f"**Multikolinearitas:** VIF setara maksimum = "
+            f"{_fmt(max_vif, 2)} "
+            + (
+                "(aman, di bawah 5)."
+                if max_vif < 5
+                else "(perlu diperhatikan, di atas 5)."
+            )
+        )
+
+    return out
 
 # =============================================================================
 # KESIMPULAN OTOMATIS
