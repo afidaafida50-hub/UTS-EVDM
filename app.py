@@ -1142,29 +1142,127 @@ def interp_uni(d, v):
 # =============================================================================
 # 3. BIVARIAT
 # =============================================================================
-bi_choices <- function(x, y) {
-  xc <- x %in% cat_all; yc <- y %in% cat_all
-  if (!xc && !yc) c("Scatter plot + garis tren", "Scatter plot + kurva linear, kuadratik, nonparametrik", "Line plot rata-rata Y per X", "Correlation plot", "Heatmap kepadatan 2D")
-  else if (xc != yc) c("Grouped boxplot", "Grouped violin plot", "Grouped kernel density plot", "Grouped ridgeline plot", "Grouped strip plot",
-                       "Grouped mean/SEM plot", "Bar chart statistik ringkasan", "Bar chart rata-rata (+/- SE)", "Cleveland dot chart")
-  else c("Stacked bar chart", "Grouped bar chart", "Segmented bar chart (100%)", "Heatmap tabulasi silang")
-}
+def bi_choices(x, y):
+
+    xc = x in cat_all
+    yc = y in cat_all
+
+    if not xc and not yc:
+        return [
+            "Scatter plot + garis tren",
+            "Scatter plot + kurva linear, kuadratik, nonparametrik",
+            "Line plot rata-rata Y per X",
+            "Correlation plot",
+            "Heatmap kepadatan 2D"
+        ]
+
+    elif xc != yc:
+        return [
+            "Grouped boxplot",
+            "Grouped violin plot",
+            "Grouped kernel density plot",
+            "Grouped ridgeline plot",
+            "Grouped strip plot",
+            "Grouped mean/SEM plot",
+            "Bar chart statistik ringkasan",
+            "Bar chart rata-rata (+/- SE)",
+            "Cleveland dot chart"
+        ]
+
+    else:
+        return [
+            "Stacked bar chart",
+            "Grouped bar chart",
+            "Segmented bar chart (100%)",
+            "Heatmap tabulasi silang"
+        ]
 
 # Correlation plot: lingkaran (segitiga bawah) + angka r (segitiga atas)
-plot_corr_circle <- function(d, vars = num_all) {
-  m <- cor(d[, vars, drop = FALSE]); df <- as.data.frame(as.table(m)); names(df) <- c("V1", "V2", "r")
-  df$i <- match(as.character(df$V1), vars); df$j <- match(as.character(df$V2), vars)
-  df$V1 <- factor(df$V1, levels = vars); df$V2 <- factor(df$V2, levels = vars)
-  ggplot() +
-    geom_point(data = df[df$i > df$j, ], aes(V1, V2, size = abs(r), fill = r), shape = 21, colour = pk$grid) +
-    geom_text(data = df[df$i < df$j, ], aes(V1, V2, label = sprintf("%.2f", r)), colour = pk$txt, fontface = "bold") +
-    geom_text(data = df[df$i == df$j, ], aes(V1, V2, label = as.character(V1)), colour = pk$d, fontface = "bold") +
-    scale_size_continuous(range = c(3, 22), limits = c(0, 1), guide = "none") +
-    scale_fill_gradient2(low = pk$slate, mid = "white", high = pk$s, limits = c(-1, 1), midpoint = 0, name = "r") +
-    scale_x_discrete(limits = vars) + scale_y_discrete(limits = rev(vars)) +
-    labs(title = "Correlation plot (Pearson)", subtitle = "Lingkaran: ukuran dan warna = kekuatan korelasi | Angka: nilai r", x = NULL, y = NULL) +
-    theme_pink() + theme(panel.grid = element_blank())
-}
+def plot_corr_circle(d, vars=None):
+
+    if vars is None:
+        vars = num_all
+
+    m = d[vars].corr(method="pearson")
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7)
+    )
+
+    n = len(vars)
+
+    for i in range(n):
+        for j in range(n):
+
+            r = m.iloc[i, j]
+
+            if i > j:
+
+                color = (
+                    pk["s"] if r > 0
+                    else pk["slate"]
+                )
+
+                circle = plt.Circle(
+                    (j, i),
+                    radius=0.12 + abs(r) * 0.27,
+                    color=color,
+                    alpha=0.8
+                )
+
+                ax.add_patch(circle)
+
+            elif i < j:
+
+                ax.text(
+                    j,
+                    i,
+                    f"{r:.2f}",
+                    ha="center",
+                    va="center",
+                    color=pk["txt"],
+                    fontweight="bold"
+                )
+
+            else:
+
+                ax.text(
+                    j,
+                    i,
+                    vars[i],
+                    ha="center",
+                    va="center",
+                    color=pk["d"],
+                    fontweight="bold"
+                )
+
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+
+    ax.set_xticklabels(vars)
+    ax.set_yticklabels(vars)
+
+    ax.invert_yaxis()
+
+    ax.set_xlim(-0.5, n - 0.5)
+    ax.set_ylim(n - 0.5, -0.5)
+
+    ax.set_aspect("equal")
+
+    ax.set_title(
+        "Correlation plot (Pearson)",
+        fontweight="bold",
+        color=pk["d"]
+    )
+
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+    ax.grid(False)
+
+    fig.tight_layout()
+
+    return fig
 
 plot_bi <- function(d, x, y, type) {
   xc <- x %in% cat_all; yc <- y %in% cat_all
