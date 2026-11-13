@@ -5900,7 +5900,7 @@ with tabs[3]:
         with col2:
             mv_mcol = st.selectbox(
                 "Warna titik",
-                [NONE] + cat_base
+                [NONE] + cat_base,
               key="mv_mcol_selectbox"
             )
 
