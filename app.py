@@ -4890,31 +4890,176 @@ def interp_reg(m, resp, logy):
 # =============================================================================
 # KESIMPULAN OTOMATIS
 # =============================================================================
-auto_conclusion <- function(d, m, resp, logy) {
-  s <- summary(m); co <- coef(s)[-1, , drop = FALSE]; sg <- rownames(co)[co[, 4] < .05]
-  cm <- cor(d[, c("Quantity", "Total", "Rating", "Hour")]); diag(cm) <- 0
-  i <- which(abs(cm) == max(abs(cm)), arr.ind = TRUE)[1, ]
-  c(sprintf("Data yang dianalisis berisi **%d transaksi**; nilai transaksi (Total) berkisar %s sampai %s dengan median **%s** dan rata-rata %s (%s).",
-            nrow(d), fmt(min(d$Total)), fmt(max(d$Total)), fmt(median(d$Total)), fmt(mean(d$Total)), if (skew_fun(d$Total) > .5) "distribusi miring ke kanan" else "distribusi relatif simetris"),
-    sprintf("Pasangan variabel numerik dengan korelasi terkuat adalah **%s** dan **%s** (r = %s).", rownames(cm)[i[1]], colnames(cm)[i[2]], fmt(cm[i[1], i[2]], 3)),
-    sprintf("Model regresi (respons **%s**%s) memiliki Adj. R2 = **%s**; prediktor signifikan pada taraf 5%%: **%s**.", resp, if (logy) ", transformasi ln" else "", fmt(s$adj.r.squared, 3),
-            if (length(sg) == 0) "tidak ada" else paste(vapply(sg, function(n) coef_label(m, n), ""), collapse = ", ")))
-}
-# EDIT: sesuaikan rekomendasi berikut dengan hasil analisis akhir Anda.
-REKOMENDASI <- c(
-  "Jumlah unit per transaksi (Quantity) merupakan faktor utama nilai transaksi; promosi berbasis jumlah pembelian (paket bundling, potongan harga pembelian banyak) berpotensi menaikkan nilai transaksi.",
-  "Cabang, tipe pelanggan, jenis kelamin, lini produk, dan metode pembayaran tidak menunjukkan pengaruh nyata terhadap nilai transaksi setelah Quantity dikendalikan, sehingga strategi dari sisi nilai transaksi tidak perlu dibedakan berdasarkan segmen tersebut.",
-  "Rating tidak berkaitan dengan nilai transaksi maupun jumlah pembelian; peningkatan kepuasan pelanggan perlu ditelusuri melalui data tambahan seperti kualitas layanan dan waktu tunggu.",
-  "Penelitian lanjutan disarankan menambahkan variabel harga satuan, periode data yang lebih panjang, serta model yang menangani ragam tidak konstan (transformasi atau regresi robust)."
-)
-KETERBATASAN <- c(
-  "Data bersifat observasional dan hanya mencakup periode singkat (Januari-Maret) sehingga hasil tidak dapat digeneralisasi ke seluruh waktu.",
-  "Regresi menunjukkan hubungan (asosiasi), bukan sebab-akibat.",
-  "Variabel penting seperti harga satuan tidak tersedia pada data, sehingga sebagian keragaman nilai transaksi tidak dapat dijelaskan model.",
-  "Residual cenderung tidak normal dan ragamnya tidak konstan (bertambah seiring Quantity); inferensi (uji t/F, selang kepercayaan) hanya pendekatan. Transformasi log atau regresi robust dapat dipertimbangkan.",
-  "Model linear mengasumsikan efek aditif dan linear; interaksi antar variabel tidak dimodelkan."
-)
+def auto_conclusion(d, m, resp, logy):
+    """
+    Membuat kesimpulan otomatis berdasarkan data dan model regresi.
+    Membutuhkan fungsi coef_label() dari blok kode regresi sebelumnya.
+    """
 
+    import numpy as np
+    import pandas as pd
+
+    from scipy.stats import skew
+
+    # Ringkasan model dan koefisien selain intercept
+    summary = m.summary2()
+    coef = m.params.drop(labels=["Intercept"], errors="ignore")
+    pvalues = m.pvalues.drop(labels=["Intercept"], errors="ignore")
+
+    # Prediktor yang signifikan pada taraf 5%
+    significant = pvalues[pvalues < 0.05].index.tolist()
+
+    # Korelasi antarvariabel numerik
+    corr_vars = ["Quantity", "Total", "Rating", "Hour"]
+    corr_data = d[corr_vars].apply(pd.to_numeric, errors="coerce")
+    corr_matrix = corr_data.corr()
+
+    # Menghilangkan korelasi diagonal
+    corr_matrix = corr_matrix.copy()
+    np.fill_diagonal(corr_matrix.values, 0)
+
+    # Menentukan pasangan variabel dengan korelasi terkuat
+    corr_abs = corr_matrix.abs()
+    i, j = np.unravel_index(
+        np.nanargmax(corr_abs.to_numpy()),
+        corr_abs.shape
+    )
+
+    corr_x = corr_matrix.index[i]
+    corr_y = corr_matrix.columns[j]
+    corr_value = corr_matrix.iloc[i, j]
+
+    # Statistik deskriptif Total
+    total = pd.to_numeric(d["Total"], errors="coerce").dropna()
+
+    n = len(d)
+    min_total = total.min()
+    max_total = total.max()
+    median_total = total.median()
+    mean_total = total.mean()
+
+    # Mengukur kemencengan distribusi
+    skewness = skew(total, nan_policy="omit")
+
+    distribution = (
+        "distribusi miring ke kanan"
+        if skewness > 0.5
+        else "distribusi relatif simetris"
+    )
+
+    # Format angka
+    def format_number(x, digits=2):
+        if pd.isna(x):
+            return "-"
+        return f"{x:,.{digits}f}"
+
+    # Menyusun nama prediktor signifikan
+    if len(significant) == 0:
+        significant_text = "tidak ada"
+    else:
+        significant_text = ", ".join(
+            coef_label(m, name) for name in significant
+        )
+
+    # Mengambil Adjusted R-squared
+    adj_r2 = m.rsquared_adj
+
+    # Membuat kesimpulan
+    conclusions = [
+        (
+            f"Data yang dianalisis berisi **{n} transaksi**; "
+            f"nilai transaksi (Total) berkisar "
+            f"{format_number(min_total)} sampai {format_number(max_total)} "
+            f"dengan median **{format_number(median_total)}** dan "
+            f"rata-rata {format_number(mean_total)} "
+            f"({distribution})."
+        ),
+
+        (
+            f"Pasangan variabel numerik dengan korelasi terkuat adalah "
+            f"**{corr_x}** dan **{corr_y}** "
+            f"(r = {format_number(corr_value, 3)})."
+        ),
+
+        (
+            f"Model regresi (respons **{resp}**"
+            f"{', transformasi ln' if logy else ''}) "
+            f"memiliki Adj. R2 = **{format_number(adj_r2, 3)}**; "
+            f"prediktor signifikan pada taraf 5%: "
+            f"**{significant_text}**."
+        )
+    ]
+
+    return conclusions
+
+
+# ============================================================
+# REKOMENDASI
+# ============================================================
+
+REKOMENDASI = [
+    (
+        "Jumlah unit per transaksi (Quantity) merupakan faktor utama "
+        "nilai transaksi; promosi berbasis jumlah pembelian "
+        "(paket bundling, potongan harga pembelian banyak) "
+        "berpotensi menaikkan nilai transaksi."
+    ),
+
+    (
+        "Cabang, tipe pelanggan, jenis kelamin, lini produk, dan metode "
+        "pembayaran tidak menunjukkan pengaruh nyata terhadap nilai "
+        "transaksi setelah Quantity dikendalikan, sehingga strategi "
+        "dari sisi nilai transaksi tidak perlu dibedakan berdasarkan "
+        "segmen tersebut."
+    ),
+
+    (
+        "Rating tidak berkaitan dengan nilai transaksi maupun jumlah "
+        "pembelian; peningkatan kepuasan pelanggan perlu ditelusuri "
+        "melalui data tambahan seperti kualitas layanan dan waktu tunggu."
+    ),
+
+    (
+        "Penelitian lanjutan disarankan menambahkan variabel harga satuan, "
+        "periode data yang lebih panjang, serta model yang menangani "
+        "ragam tidak konstan (transformasi atau regresi robust)."
+    )
+]
+
+
+# ============================================================
+# KETERBATASAN
+# ============================================================
+
+KETERBATASAN = [
+    (
+        "Data bersifat observasional dan hanya mencakup periode singkat "
+        "(Januari-Maret) sehingga hasil tidak dapat digeneralisasi "
+        "ke seluruh waktu."
+    ),
+
+    (
+        "Regresi menunjukkan hubungan (asosiasi), bukan sebab-akibat."
+    ),
+
+    (
+        "Variabel penting seperti harga satuan tidak tersedia pada data, "
+        "sehingga sebagian keragaman nilai transaksi tidak dapat "
+        "dijelaskan model."
+    ),
+
+    (
+        "Residual cenderung tidak normal dan ragamnya tidak konstan "
+        "(bertambah seiring Quantity); inferensi (uji t/F, selang "
+        "kepercayaan) hanya pendekatan. Transformasi log atau regresi "
+        "robust dapat dipertimbangkan."
+    ),
+
+    (
+        "Model linear mengasumsikan efek aditif dan linear; interaksi "
+        "antar variabel tidak dimodelkan."
+    )
+]
 # =============================================================================
 # TAMPILAN (CSS formal, tema pink)
 # =============================================================================
