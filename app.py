@@ -6422,7 +6422,7 @@ with st.sidebar:
     )
 
     if date_min is not None:
-    f_date = st.date_input(
+      f_date = st.date_input(
         "Rentang tanggal",
         value=(date_min, date_max),
         min_value=date_min,
