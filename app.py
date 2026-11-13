@@ -21,7 +21,7 @@ TUJUAN = [
 
 # ---- Konstanta variabel ------------------------------------------------------
 cat_base = ["Branch", "Customer type", "Gender", "Product line", "Payment"]
-cat_all  = [cat_base, "Bulan", "Hari"]
+cat_all = cat_base + ["Bulan", "Hari"]
 num_all  = ["Quantity", "Total", "Rating", "Hour"]
 NONE = "(tidak ada)"
 bulan_lv = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus",
@@ -96,6 +96,15 @@ def read_sales(path):
         d = pd.read_csv(path)
     else:
         return None
+
+    # Membersihkan nama kolom
+    d.columns = (
+        d.columns
+        .astype(str)
+        .str.replace("\ufeff", "", regex=False)
+        .str.replace("\xa0", " ", regex=False)
+        .str.strip()
+    )
 
     # Kolom yang wajib tersedia
     need = [
