@@ -1,10 +1,8 @@
-streamlit
+shiny
+plotnine
 pandas
 numpy
-plotly
-matplotlib
-seaborn
-openpyxl
 scipy
 statsmodels
-scikit-learn
+matplotlib
+openpyxl
