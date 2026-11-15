@@ -1,8 +1,8 @@
-shiny
-plotnine
+streamlit>=1.46
 pandas
 numpy
 scipy
 statsmodels
 matplotlib
 openpyxl
+xlrd
