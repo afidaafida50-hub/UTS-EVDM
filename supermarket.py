@@ -1,9 +1,3 @@
-# =============================================================================
-# Konversi R Shiny (UTS_EVDM.R) -> Python Streamlit
-# Struktur dipertahankan: konfigurasi, konstanta, kamus, pembacaan data, tema
-# grafik, fungsi bantu, 2. Univariat, 3. Bivariat, 4. Multivariat,
-# 5. Regresi Linear Berganda, kesimpulan otomatis, tampilan (CSS), UI & server.
-# =============================================================================
 import re
 import html as _html
 import zlib
@@ -27,7 +21,7 @@ from statsmodels.tsa.stattools import acf as sm_acf
 
 warnings.filterwarnings("ignore")
 
-# ---- KONFIGURASI: EDIT BAGIAN INI -------------------------------------------
+# KONFIGURASI
 DATA_FILE   = "Data_Penjualan.xlsx"
 NAMA        = "Afida Mar'atus Solihah"
 NIM         = "231064005"
@@ -129,7 +123,7 @@ def load_upload(raw, ext):
     return read_sales(BytesIO(raw), ext)
 
 
-# ---- Palet & tema grafik (pink formal) ---------------------------------------
+# ---- Palet & tema grafik ---------------------------------------
 pk = dict(d="#880E4F", m="#C2185B", s="#AD1457", l="#F48FB1", xl="#F8BBD0",
           bg="#FFF5F8", txt="#3B2A33", grid="#EFDDE4", mauve="#6D4C5E", slate="#4F6D8F")
 _PAL = ["#AD1457", "#F48FB1", "#6D4C5E", "#F8BBD0", "#D81B60", "#B39DAB", "#880E4F"]
@@ -1139,7 +1133,7 @@ def auto_conclusion(d, M):
             f"Model regresi (respons **{resp}**{', transformasi ln' if logy else ''}) memiliki Adj. R2 = **{fmt(r.rsquared_adj, 3)}**; prediktor signifikan pada taraf 5%: **{'tidak ada' if not sg else ', '.join(M['collabel'][n] for n in sg)}**."]
 
 
-# EDIT: sesuaikan rekomendasi berikut dengan hasil analisis akhir Anda.
+# EDIT
 REKOMENDASI = [
     "Jumlah unit per transaksi (Quantity) merupakan faktor utama nilai transaksi; promosi berbasis jumlah pembelian (paket bundling, potongan harga pembelian banyak) berpotensi menaikkan nilai transaksi.",
     "Cabang, tipe pelanggan, jenis kelamin, lini produk, dan metode pembayaran tidak menunjukkan pengaruh nyata terhadap nilai transaksi setelah Quantity dikendalikan, sehingga strategi dari sisi nilai transaksi tidak perlu dibedakan berdasarkan segmen tersebut.",
@@ -1156,7 +1150,7 @@ KETERBATASAN = [
 
 
 # =============================================================================
-# TAMPILAN (CSS formal, tema pink)
+# TAMPILAN 
 # =============================================================================
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@600;700&display=swap');
@@ -1637,7 +1631,7 @@ def tab_kes():
 
 
 # =============================================================================
-# UTAMA: navigasi tab (hanya tab aktif yang dirender, seperti Shiny)
+# UTAMA
 # =============================================================================
 TABS = {"1. Masalah dan Data": tab_data, "2. Univariat": tab_uni, "3. Bivariat": tab_bi, "4. Multivariat": tab_mv,
         "5. Regresi Linear Berganda": tab_reg, "6. Kesimpulan": tab_kes}
