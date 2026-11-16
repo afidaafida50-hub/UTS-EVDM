@@ -26,7 +26,7 @@ DATA_FILE   = "Data_Penjualan.xlsx"
 NAMA        = "Afida Mar'atus Solihah"
 NIM         = "231064005"
 APP_TITLE   = "Analisis Faktor yang Memengaruhi Nilai Transaksi Penjualan Supermarket"
-SUMBER_DATA = "Dataset sekunder data transaksi supermarket (Data_Penjualan.xlsx). Isi dengan tautan/sumber asli yang dapat dipertanggungjawabkan (mis. Kaggle: Supermarket Sales)."
+SUMBER_DATA = "Dataset sekunder data transaksi supermarket (Data_Penjualan.xlsx).  https://github.com/SarahShafqat/Kaggle-Datasets/blob/master/supermarket_sales.csv"
 LATAR_BELAKANG = "Supermarket perlu memahami faktor yang berkaitan dengan besarnya nilai transaksi agar strategi promosi, penataan produk, dan pelayanan dapat dirancang berdasarkan data. Nilai transaksi dapat dipengaruhi oleh jumlah barang yang dibeli, karakteristik pelanggan, lini produk, cabang, metode pembayaran, dan waktu transaksi. Analisis eksplorasi dan regresi linear berganda digunakan untuk mengidentifikasi faktor-faktor tersebut."
 TUJUAN = [
     "Menggambarkan karakteristik setiap variabel pada data transaksi (univariat).",
